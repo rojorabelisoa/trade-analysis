@@ -39,10 +39,11 @@ confirmBars  = input.int(12, "Bougies max pour confirmer", minval = 1, group = g
 
 grpRk = "4. Risque"
 slBufAtr     = input.float(0.2, "Marge du stop (× ATR LTF)", step = 0.05, group = grpRk)
-stopMode     = input.string("Structure H4", "Stop loss", options = ["Structure H4", "Mèche de liquidation"], group = grpRk, tooltip = "• Structure H4 : sous le dernier creux H4 (achat) / au-dessus du dernier sommet H4 (vente). Si la mèche de liquidation est plus loin, c'est elle qui est utilisée.\n• Mèche de liquidation : juste derrière la mèche du sweep (stop plus court).")
-tpMode       = input.string("Liquidité H4", "Objectif (take profit)", options = ["Liquidité H4", "R:R fixe"], group = grpRk, tooltip = "• Liquidité H4 : le plus haut H4 récent (achat) / le plus bas H4 récent (vente), là où reposent les stops (BSL / SSL).\n• R:R fixe : objectif = R:R × risque.")
+stopMode     = input.string("Mèche de liquidation", "Stop loss", options = ["Structure H4", "Mèche de liquidation"], group = grpRk, tooltip = "• Structure H4 : sous le dernier creux H4 (achat) / au-dessus du dernier sommet H4 (vente). Si la mèche de liquidation est plus loin, c'est elle qui est utilisée.\n• Mèche de liquidation : juste derrière la mèche du sweep (stop plus court).")
+tpMode       = input.string("Order block opposé", "Objectif (take profit)", options = ["Order block opposé", "Liquidité H4", "R:R fixe"], group = grpRk, tooltip = "• Order block opposé : le bord du prochain order block non mitigé dans le sens du trade (un OB vendeur au-dessus pour un achat, un OB acheteur en dessous pour une vente). Sans OB, l'objectif R:R fixe est utilisé.\n• Liquidité H4 : le plus haut H4 récent (achat) / le plus bas H4 récent (vente), là où reposent les stops (BSL / SSL).\n• R:R fixe : objectif = R:R × risque.")
 tpLook       = input.int(20, "Liquidité H4 : bougies H4 regardées", minval = 3, group = grpRk)
-minRR        = input.float(1.5, "R:R minimum (sinon pas de trade)", step = 0.25, group = grpRk)
+minRR        = input.float(1.0, "R:R minimum (sinon pas de trade)", step = 0.25, group = grpRk)
+obTf         = input.timeframe("60", "Timeframe des order blocks (objectif)", group = grpRk, tooltip = "60 = OB H1 (objectifs proches, trades de quelques minutes à quelques heures). 240 = OB H4 (objectifs plus loin).")
 rr           = input.float(2.0, "R:R fixe (si choisi)", step = 0.25, group = grpRk)
 maxRiskAtr   = input.float(1.5, "Stop max (× ATR du timeframe du stop)", step = 0.1, group = grpRk)
 maxHold      = input.int(288, "Durée max en position (bougies)", minval = 1, group = grpRk)
@@ -79,6 +80,7 @@ showTrendBg  = input.bool(true, "Colorer le fond selon la tendance H4", group = 
 showStruct   = input.bool(true, "Structure H4 : HH / HL / LH / LL, BOS / CHOCH", group = grpV)
 showLiq      = input.bool(true, "Zones de liquidité (BSL / SSL et liquidités prises)", group = grpV)
 showMitig    = input.bool(true, "Zones de mitigation (order block avant l'entrée)", group = grpV)
+showOB       = input.bool(true, "Order blocks non mitigés (objectifs)", group = grpV)
 mitigBars    = input.int(30, "Longueur d'une zone de mitigation (bougies)", minval = 5, group = grpV)
 atrLen       = 14
 
@@ -165,6 +167,59 @@ f_htf() =>
 // Tendance et structure sur le timeframe de tendance (H4)
 [tPH, tPL, tPivT, tATR, tBarT, hEma, hTrBos, hTrStrict, hEvt, hEvtLvl, hEvtT, tLastH, tLastL, tHH, tLL] = request.security(syminfo.tickerid, trendTf, f_htf(), lookahead = barmerge.lookahead_on)
 newTrendBar = not na(tBarT) and (na(tBarT[1]) or tBarT != tBarT[1])
+
+// ───────────────────────────── Order blocks (objectifs) ─────────────────────────────
+// OB acheteur : dernière bougie baissière avant une bougie haussière qui clôture au-dessus de son plus haut.
+// OB vendeur  : dernière bougie haussière avant une bougie baissière qui clôture sous son plus bas.
+f_ob() =>
+    bullOB = close[1] < open[1] and close > high[1]
+    bearOB = close[1] > open[1] and close < low[1]
+    obH = high[1]
+    obL = low[1]
+    [bullOB[1], bearOB[1], obH[1], obL[1], time[2], time[1]]
+
+[obBull, obBear, obTop, obBot, obTime, obBarT] = request.security(syminfo.tickerid, obTf, f_ob(), lookahead = barmerge.lookahead_on)
+newObBar = not na(obBarT) and (na(obBarT[1]) or obBarT != obBarT[1])
+
+var array<float> obT = array.new<float>()
+var array<float> obB = array.new<float>()
+var array<int>   obD = array.new<int>()     // 1 = OB acheteur (sous le prix), -1 = OB vendeur (au-dessus)
+var array<int>   obX = array.new<int>()     // heure de la bougie OB
+if newObBar
+    if obBull
+        obT.push(obTop)
+        obB.push(obBot)
+        obD.push(1)
+        obX.push(obTime)
+    if obBear
+        obT.push(obTop)
+        obB.push(obBot)
+        obD.push(-1)
+        obX.push(obTime)
+    while obT.size() > 60
+        obT.shift()
+        obB.shift()
+        obD.shift()
+        obX.shift()
+// Un OB est mitigé (consommé) dès que le prix le touche
+if obT.size() > 0
+    for i = obT.size() - 1 to 0
+        if (obD.get(i) == -1 and high >= obB.get(i)) or (obD.get(i) == 1 and low <= obT.get(i))
+            obT.remove(i)
+            obB.remove(i)
+            obD.remove(i)
+            obX.remove(i)
+
+// Prochain OB opposé : vendeur au-dessus du prix (achat) / acheteur en dessous (vente)
+f_nextOB(int dir, float px) =>
+    float best = na
+    if obT.size() > 0
+        for i = 0 to obT.size() - 1
+            if dir == 1 and obD.get(i) == -1 and obB.get(i) > px
+                best := na(best) ? obB.get(i) : math.min(best, obB.get(i))
+            if dir == -1 and obD.get(i) == 1 and obT.get(i) < px
+                best := na(best) ? obT.get(i) : math.max(best, obT.get(i))
+    best
 newHtf = not na(hBarT) and (na(hBarT[1]) or hBarT != hBarT[1])
 
 // ───────────────────────────── Biais & annonces ─────────────────────────────
@@ -373,12 +428,14 @@ if ready and pDir != 0
         risk = pDir == 1 ? close - stp : stp - close
         riskCap = (stopMode == "Structure H4" ? maxRiskAtr * nz(tATR, hATR) : maxRiskAtr * hATR)
         tgtH4   = pDir == 1 ? tHH : tLL
-        tgt     = tpMode == "Liquidité H4" ? tgtH4 : (pDir == 1 ? close + rr * risk : close - rr * risk)
+        tgtRR   = pDir == 1 ? close + rr * risk : close - rr * risk
+        tgtOB   = f_nextOB(pDir, close)
+        tgt     = tpMode == "Liquidité H4" ? tgtH4 : tpMode == "Order block opposé" ? nz(tgtOB, tgtRR) : tgtRR
         rrReal  = risk > 0 and not na(tgt) ? (pDir == 1 ? tgt - close : close - tgt) / risk : 0.0
         okBias = f_biasAllows(nowT, pDir)
         okNews = not f_newsBlocked(nowT)
         okSess = f_sessOk(nowT)
-        okRisk = risk > 0 and risk <= riskCap and rrReal >= (tpMode == "Liquidité H4" ? minRR : 0.0)
+        okRisk = risk > 0 and risk <= riskCap and rrReal >= (tpMode == "R:R fixe" ? 0.0 : minRR)
         cConfirm += 1
         cBias += okBias ? 0 : 1
         cNews += okBias and not okNews ? 1 : 0
@@ -628,6 +685,18 @@ if newTrendBar and showStruct
              color = color.new(color.black, 100), textcolor = evCol, size = size.small)
 
 var array<box>   zBoxes = array.new<box>()
+var array<box>   obBoxes = array.new<box>()
+if barstate.islast and showOB
+    for b in obBoxes
+        b.delete()
+    obBoxes.clear()
+    if obT.size() > 0
+        for i = 0 to obT.size() - 1
+            oc = obD.get(i) == 1 ? color.new(color.lime, 0) : color.new(color.orange, 0)
+            obBoxes.push(box.new(obX.get(i), obT.get(i), time, obB.get(i), xloc = xloc.bar_time, extend = extend.right,
+                 border_color = color.new(oc, 50), bgcolor = color.new(oc, 88), border_style = line.style_dashed,
+                 text = obD.get(i) == 1 ? "OB acheteur" : "OB vendeur", text_size = size.tiny, text_color = oc,
+                 text_halign = text.align_left))
 var array<line>  lqLines = array.new<line>()
 var array<label> lqLabels = array.new<label>()
 if barstate.islast and showLiq

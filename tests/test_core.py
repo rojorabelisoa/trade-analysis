@@ -191,3 +191,19 @@ def test_separate_trend_timeframe():
     for s in sigs:
         k = tr.index.searchsorted(s.time, side="right") - 1
         assert tr["bos"].iloc[k] == (1 if s.direction == "long" else -1)
+
+
+def test_order_blocks_and_ob_target():
+    from trade_analysis.strategy import find_order_blocks
+    df = _bars([[100, 101, 98, 99],     # baissière
+                [99, 103, 99, 102.5],   # haussière, clôture > 101 -> OB acheteur [98, 101]
+                [102.5, 104, 102, 103.5],  # haussière
+                [103.5, 104, 99, 100]])  # baissière, clôture < 102 -> OB vendeur [102, 104]
+    obs = find_order_blocks(df, pd.Timedelta(minutes=5))
+    assert [(o["dir"], o["bot"], o["top"]) for o in obs] == [(1, 98, 101), (-1, 102, 104)]
+    ltf = synthetic_5m()
+    sigs = generate_signals(resample(ltf, "1h"), ltf, "GC", Config(trend_mode="off"))
+    assert sigs
+    for s in sigs:
+        sign = 1 if s.direction == "long" else -1
+        assert sign * (s.target - s.entry) >= sign * (s.entry - s.stop) * 1.0 - 1e-9

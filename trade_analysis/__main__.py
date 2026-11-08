@@ -72,11 +72,11 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--trend", choices=["structure", "strict", "ema", "off"], default="structure",
                         help="tendance HTF : on ne trade que dans son sens (défaut : structure BOS/CHOCH)")
         sp.add_argument("--direction", choices=["both", "long", "short"], default="both")
-        sp.add_argument("--stop", choices=["h4", "sweep"], default="h4",
+        sp.add_argument("--stop", choices=["sweep", "h4"], default="sweep",
                         help="stop : dernier creux/sommet du TF de tendance (h4) ou mèche de liquidation (sweep)")
-        sp.add_argument("--target", choices=["h4", "rr"], default="h4",
-                        help="objectif : liquidité du TF de tendance (h4) ou R:R fixe (rr, voir --rr)")
-        sp.add_argument("--min-rr", type=float, default=1.5)
+        sp.add_argument("--target", choices=["ob", "h4", "rr"], default="ob",
+                        help="objectif : prochain order block opposé (ob), liquidité du TF de tendance (h4) ou R:R fixe (rr)")
+        sp.add_argument("--min-rr", type=float, default=1.0)
         sp.add_argument("--neutral-blocks", action="store_true",
                         help="biais 'neutral' = pas de trade (défaut : les deux sens)")
         sp.add_argument("--decimals", type=int, default=2)

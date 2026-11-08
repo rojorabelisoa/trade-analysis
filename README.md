@@ -13,7 +13,7 @@ prudent** pour vérifier qu'il y a un avantage *avant* de partager quoi que ce s
 | Zones S/R | H1 (réglable séparément de la tendance) | Swings (5 bougies de chaque côté), regroupés en zones si écart < 0,35 × ATR. Zone valide si ≥ 2 contacts. |
 | Liquidation | 5m ou 15m | La mèche dépasse la zone d'au moins 0,2 × ATR(LTF), mais de moins de 1 × ATR(HTF) (au-delà, c'est une vraie cassure), puis la bougie **clôture de nouveau dans la zone**. |
 | Entrée | 5m ou 15m | Dans les 12 bougies suivantes, une **clôture** casse le dernier swing LTF opposé (CHOCH). Le sweep est annulé si le prix repasse sous sa mèche. |
-| Risque | H4 | Stop sous le dernier creux H4 (achat) ou au-dessus du dernier sommet H4 (vente), ou derrière la mèche si elle est plus loin. Objectif = liquidité H4 : le plus haut (achat) ou le plus bas (vente) des 20 dernières bougies H4. Trade refusé si le R:R est inférieur à 1,5 ou si le stop dépasse 1,5 × ATR H4. Variante : stop sur la mèche et objectif à R:R fixe. |
+| Risque | — | **Stop** juste derrière la mèche de liquidation (± 0,2 × ATR). **Objectif** = bord du **prochain order block opposé non mitigé** (OB vendeur au-dessus pour un achat, OB acheteur en dessous pour une vente), sur le timeframe des OB (H1 par défaut). Sans OB, objectif à 2R. Trade refusé si R:R < 1. Variantes : stop sur la structure H4, objectif = liquidité H4 ou R:R fixe. |
 | Filtres | — | Biais fondamental (`bias.csv`), aucune entrée ±30 min autour d'une annonce à fort impact (`news.csv`), sessions en option. |
 
 Tous ces chiffres sont des paramètres de départ (`Config` dans

@@ -59,10 +59,11 @@ class Config:
     confirm_bars: int = 12
     # Risque
     sl_buffer_atr: float = 0.2
-    stop_mode: str = "h4"  # "h4" (dernier creux/sommet du TF de tendance) | "sweep" (mèche)
-    target_mode: str = "h4"  # "h4" (liquidité : plus haut/bas récent du TF de tendance) | "rr"
+    stop_mode: str = "sweep"  # "sweep" (mèche de liquidation) | "h4" (dernier creux/sommet du TF de tendance)
+    # "ob" (prochain order block opposé non mitigé, R:R fixe si aucun) | "h4" (liquidité du TF de tendance) | "rr"
+    target_mode: str = "ob"
     tp_lookback: int = 20  # bougies du TF de tendance pour la liquidité visée
-    min_rr: float = 1.5  # R:R minimum avec un objectif structurel
+    min_rr: float = 1.0  # R:R minimum avec un objectif structurel
     rr: float = 2.0  # R:R fixe si target_mode == "rr"
     max_risk_htf_atr: float = 1.5  # × ATR du TF du stop
     # Filtres
@@ -147,6 +148,23 @@ def htf_trend(htf: pd.DataFrame, pivots: list[Pivot], dur: pd.Timedelta,
     }, index=close_times)
 
 
+def find_order_blocks(df: pd.DataFrame, dur: pd.Timedelta) -> list[dict]:
+    """Order blocks : bougie opposée juste avant une bougie qui l'englobe en clôture.
+
+    OB acheteur (dir=1) : bougie baissière puis bougie haussière qui clôture au-dessus de son plus haut.
+    OB vendeur (dir=-1) : bougie haussière puis bougie baissière qui clôture sous son plus bas.
+    Connu à la clôture de la bougie d'englobement (`known_at`).
+    """
+    o, h, l, c = (df[k].to_numpy() for k in ("open", "high", "low", "close"))
+    out = []
+    for i in range(1, len(df)):
+        if c[i - 1] < o[i - 1] and c[i] > h[i - 1]:
+            out.append({"dir": 1, "top": h[i - 1], "bot": l[i - 1], "known_at": df.index[i] + dur})
+        if c[i - 1] > o[i - 1] and c[i] < l[i - 1]:
+            out.append({"dir": -1, "top": h[i - 1], "bot": l[i - 1], "known_at": df.index[i] + dur})
+    return out
+
+
 def _bar_duration(df: pd.DataFrame) -> pd.Timedelta:
     from .data import infer_bar_duration
 
@@ -189,6 +207,9 @@ def generate_signals(
     ltf_pivots = find_pivots(ltf, cfg.ltf_pivot_left, cfg.ltf_pivot_right, ltf_dur)
 
     book = ZoneBook(max_age=htf_dur * cfg.zone_max_age_bars)
+    obs_all = find_order_blocks(htf, htf_dur)
+    ob_i = 0
+    live_obs: list[dict] = []
     hp_i = lp_i = 0
     last_ltf_high: Pivot | None = None
     last_ltf_low: Pivot | None = None
@@ -215,6 +236,13 @@ def generate_signals(
                 book.add(htf_pivots[hp_i], cfg.zone_merge_atr * a_htf)
             hp_i += 1
         book.prune(close_time)
+
+        # Order blocks connus, puis mitigés dès que le prix les touche
+        while ob_i < len(obs_all) and obs_all[ob_i]["known_at"] <= close_time:
+            live_obs.append(obs_all[ob_i])
+            ob_i += 1
+        live_obs = [ob for ob in live_obs[-60:]
+                    if not ((ob["dir"] == -1 and h[i] >= ob["bot"]) or (ob["dir"] == 1 and l[i] <= ob["top"]))]
 
         # Pivots LTF confirmés -> structure courte
         while lp_i < len(ltf_pivots) and ltf_pivots[lp_i].confirmed_at <= close_time:
@@ -258,7 +286,7 @@ def generate_signals(
                     ok_dir = allow_long if d == "long" else allow_short
                     ctx = trend_df.iloc[kt] if kt >= 0 else None
                     sig = _build_signal(pending, i, c[i], a_ltf[i], a_htf, close_time,
-                                        symbol, cfg, bias, news, book, ctx) if ok_dir else None
+                                        symbol, cfg, bias, news, book, ctx, live_obs) if ok_dir else None
                     if sig is not None:
                         signals.append(sig)
                     pending = None
@@ -302,7 +330,8 @@ def _detect_sweep(zones: list[Zone], i, h, l, c, a_ltf, a_htf, cfg: Config,
 def _build_signal(pending: dict, i: int, close: float, a_ltf: float, a_htf: float,
                   close_time: pd.Timestamp, symbol: str, cfg: Config,
                   bias: BiasBook, news: NewsCalendar, book: ZoneBook,
-                  ctx: pd.Series | None = None) -> Signal | None:
+                  ctx: pd.Series | None = None,
+                  obs: list[dict] | None = None) -> Signal | None:
     d = pending["direction"]
     if not bias.allows(close_time, d, cfg.neutral_allows_both):
         return None
@@ -335,6 +364,15 @@ def _build_signal(pending: dict, i: int, close: float, a_ltf: float, a_htf: floa
             return None
         target = ctx["hh"] if d == "long" else ctx["ll"]
         if not ok(target) or sign * (target - close) / risk < cfg.min_rr:
+            return None
+    elif cfg.target_mode == "ob":
+        if d == "long":
+            cands = [ob["bot"] for ob in (obs or []) if ob["dir"] == -1 and ob["bot"] > close]
+            target = min(cands) if cands else close + cfg.rr * risk
+        else:
+            cands = [ob["top"] for ob in (obs or []) if ob["dir"] == 1 and ob["top"] < close]
+            target = max(cands) if cands else close - cfg.rr * risk
+        if sign * (target - close) / risk < cfg.min_rr:
             return None
     else:
         target = close + sign * cfg.rr * risk
