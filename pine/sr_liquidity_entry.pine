@@ -524,7 +524,7 @@ if (sigLong or sigShort) and strategy.position_size == 0
     dirTxt = sigLong ? "long" : "short"
     msg = '{"symbol":"' + syminfo.ticker + '","direction":"' + dirTxt + '","entry":' + str.tostring(close, format.mintick) +
          ',"stop":' + str.tostring(sigStop, format.mintick) + ',"target":' + str.tostring(sigTarget, format.mintick) +
-         ,"rr":' + str.tostring((math.abs(sigTarget - close)) / math.abs(close - sigStop), "0.00") + ',"zone":"' + str.tostring(pZLo, format.mintick) + '-' + str.tostring(pZHi, format.mintick) +
+         ',"rr":' + str.tostring((math.abs(sigTarget - close)) / math.abs(close - sigStop), "0.00") + ',"zone":"' + str.tostring(pZLo, format.mintick) + '-' + str.tostring(pZHi, format.mintick) +
          '","contacts":' + str.tostring(pZT) + ',"sweep":' + str.tostring(pExt, format.mintick) +
          ',"bias":"' + f_bias(nowT) + '","session":"' + f_session(nowT) + '","tf":"' + timeframe.period + '/' + htfTf + '/' + trendTf + '"}'
     alert(msg, alert.freq_once_per_bar_close)
