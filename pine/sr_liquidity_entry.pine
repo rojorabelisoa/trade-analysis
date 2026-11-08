@@ -14,7 +14,7 @@
 strategy("S/R → Liquidation → Entrée", shorttitle = "SR-Liq", overlay = true,
      initial_capital = 100000, default_qty_type = strategy.fixed, default_qty_value = 1,
      commission_type = strategy.commission.cash_per_contract, commission_value = 2.5,
-     slippage = 2, pyramiding = 0, max_boxes_count = 100, max_lines_count = 300,
+     slippage = 2, pyramiding = 0, margin_long = 5, margin_short = 5, max_boxes_count = 100, max_lines_count = 300,
      max_labels_count = 300)
 
 // ───────────────────────────── Paramètres ─────────────────────────────
@@ -325,16 +325,14 @@ if (sigLong or sigShort) and strategy.position_size != 0
 
 // ───────────────────────────── Ordres ─────────────────────────────
 // Entrée au marché à l'ouverture de la bougie suivante, un seul trade à la fois.
-var array<float> tradeStop = array.new<float>()
 
 if (sigLong or sigShort) and strategy.position_size == 0
     if sigLong
-        strategy.entry("Long", strategy.long)
+        strategy.entry("Long", strategy.long, comment = str.tostring(sigStop))
         strategy.exit("Sortie L", "Long", stop = sigStop, limit = sigTarget)
     else
-        strategy.entry("Short", strategy.short)
+        strategy.entry("Short", strategy.short, comment = str.tostring(sigStop))
         strategy.exit("Sortie S", "Short", stop = sigStop, limit = sigTarget)
-    tradeStop.push(sigStop)
     dirTxt = sigLong ? "long" : "short"
     msg = '{"symbol":"' + syminfo.ticker + '","direction":"' + dirTxt + '","entry":' + str.tostring(close, format.mintick) +
          ',"stop":' + str.tostring(sigStop, format.mintick) + ',"target":' + str.tostring(sigTarget, format.mintick) +
@@ -359,8 +357,9 @@ var int   seen    = 0
 
 if strategy.closedtrades > seen
     for k = seen to strategy.closedtrades - 1
-        if k < tradeStop.size()
-            rsk = math.abs(strategy.closedtrades.entry_price(k) - tradeStop.get(k)) * syminfo.pointvalue * math.abs(strategy.closedtrades.size(k))
+        stopK = str.tonumber(strategy.closedtrades.entry_comment(k))
+        if not na(stopK)
+            rsk = math.abs(strategy.closedtrades.entry_price(k) - stopK) * syminfo.pointvalue * math.abs(strategy.closedtrades.size(k))
             if rsk > 0
                 r = strategy.closedtrades.profit(k) / rsk
                 nTrades += 1
