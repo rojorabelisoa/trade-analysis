@@ -12,6 +12,7 @@ Les résultats sont exprimés en R (multiples du risque).
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 
 import numpy as np
@@ -21,25 +22,56 @@ from .strategy import Signal
 
 
 @dataclass
+class IntradayRules:
+    """Scalping / intraday : pas de position la nuit, limites journalières (heures UTC)."""
+
+    entry_start_h: int = 7
+    entry_end_h: int = 19
+    flat_h: int = 20
+    flat_m: int = 45
+    max_trades_day: int = 3
+    max_loss_day_r: float = 2.0
+
+    def entry_allowed(self, ts: pd.Timestamp) -> bool:
+        m = ts.hour * 60 + ts.minute
+        return self.entry_start_h * 60 <= m < self.entry_end_h * 60
+
+    def must_flat(self, ts: pd.Timestamp) -> bool:
+        m = ts.hour * 60 + ts.minute
+        return m >= self.flat_h * 60 + self.flat_m or m < self.entry_start_h * 60
+
+
+@dataclass
 class Trade:
     signal: Signal
     entry_time: pd.Timestamp
     entry: float
     exit_time: pd.Timestamp
     exit: float
-    outcome: str  # "tp" | "sl" | "timeout"
+    outcome: str  # "tp" | "sl" | "timeout" | "eod"
     r: float
 
 
 def run_backtest(ltf: pd.DataFrame, signals: list[Signal], cost: float = 0.0,
-                 max_hold_bars: int = 288) -> list[Trade]:
+                 max_hold_bars: int = 288,
+                 intraday: IntradayRules | None = None) -> list[Trade]:
     times = ltf.index
+    bar = times[1] - times[0] if len(times) > 1 else pd.Timedelta(0)
+    trades_per_day: dict = defaultdict(int)
+    r_per_day: dict = defaultdict(float)
     o, h, l, c = (ltf[k].to_numpy() for k in ("open", "high", "low", "close"))
     trades: list[Trade] = []
     busy_until = pd.Timestamp.min.tz_localize("UTC")
 
     for s in sorted(signals, key=lambda x: x.time):
         if s.time < busy_until:
+            continue
+        day = s.time.date()
+        if intraday is not None and not (
+            intraday.entry_allowed(s.time)
+            and trades_per_day[day] < intraday.max_trades_day
+            and r_per_day[day] > -intraday.max_loss_day_r
+        ):
             continue
         i = times.searchsorted(s.time, side="left")  # bougie qui ouvre au signal
         if i >= len(times):
@@ -59,12 +91,17 @@ def run_backtest(ltf: pd.DataFrame, signals: list[Signal], cost: float = 0.0,
             if hit_tp:
                 outcome, exit_px = "tp", s.target
                 break
+            if intraday is not None and intraday.must_flat(times[j] + bar):
+                outcome, exit_px = "eod", c[j]
+                break
         else:
             j = min(i + max_hold_bars, len(c) - 1)
         pnl = (exit_px - entry) if long else (entry - exit_px)
         r = (pnl - cost) / risk
         exit_time = times[j]
         trades.append(Trade(s, times[i], float(entry), exit_time, float(exit_px), outcome, float(r)))
+        trades_per_day[day] += 1
+        r_per_day[day] += r
         busy_until = exit_time
     return trades
 
@@ -84,6 +121,10 @@ def summarize(trades: list[Trade]) -> dict:
         "profit_factor": round(gains / losses, 2) if losses > 0 else float("inf"),
         "drawdown_max_R": round(dd.min(), 2),
         "pire_serie_pertes": _worst_streak(r),
+        "sorties_tp_sl_fin": "/".join(str(sum(t.outcome == o for t in trades))
+                                     for o in ("tp", "sl", "eod")),
+        "duree_moyenne_min": round(np.mean([(t.exit_time - t.entry_time).total_seconds() / 60
+                                            for t in trades]), 0),
     }
 
 

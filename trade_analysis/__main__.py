@@ -16,7 +16,7 @@ import sys
 
 import pandas as pd
 
-from .backtest import breakdown, run_backtest, summarize, trades_frame
+from .backtest import IntradayRules, breakdown, run_backtest, summarize, trades_frame
 from .data import load_tradingview_csv, resample
 from .filters import BiasBook, NewsCalendar
 from .message import format_signal
@@ -70,6 +70,8 @@ def main(argv: list[str] | None = None) -> int:
                             help="spread+commission+slippage par trade, en prix")
             sp.add_argument("--max-hold", type=int, default=288, help="bougies LTF max en position")
             sp.add_argument("--out", help="exporter les trades en CSV")
+            sp.add_argument("--intraday", action="store_true",
+                            help="pas de position la nuit : entrées 7h-19h UTC, clôture 20h45, 3 trades et -2R max par jour")
         else:
             sp.add_argument("--last", type=int, default=1, help="nombre de signaux à afficher")
             sp.add_argument("--note", default="", help="ex: 'GC1! CME, contrat déc.'")
@@ -112,7 +114,8 @@ def main(argv: list[str] | None = None) -> int:
             print("-" * 40)
         return 0
 
-    trades = run_backtest(ltf, signals, cost=args.cost, max_hold_bars=args.max_hold)
+    trades = run_backtest(ltf, signals, cost=args.cost, max_hold_bars=args.max_hold,
+                          intraday=IntradayRules() if args.intraday else None)
     for k, v in summarize(trades).items():
         print(f"{k:>20} : {v}")
     if trades:

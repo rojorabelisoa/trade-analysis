@@ -120,3 +120,27 @@ def test_message_contains_levels():
     s = _sig(pd.Timestamp("2026-01-05 10:00", tz="UTC"))
     msg = format_signal(s, "GC1! CME")
     assert "ACHAT" in msg and "95.00" in msg and "110.00" in msg
+
+
+def test_intraday_flat_and_window():
+    from trade_analysis.backtest import IntradayRules
+    rules = IntradayRules()
+    # signal à 18:55 UTC, le prix ne touche ni stop ni objectif -> sortie fin de journée
+    ltf = _bars([[100, 101, 99, 100]] * 30, start="2026-01-05 18:45")
+    trades = run_backtest(ltf, [_sig(ltf.index[2])], intraday=rules)
+    assert trades[0].outcome == "eod"
+    assert trades[0].exit_time + pd.Timedelta(minutes=5) >= pd.Timestamp("2026-01-05 20:45", tz="UTC")
+    # signal à 19:30 UTC : hors fenêtre d'entrée
+    ltf2 = _bars([[100, 101, 99, 100]] * 5, start="2026-01-05 19:20")
+    assert run_backtest(ltf2, [_sig(ltf2.index[2])], intraday=rules) == []
+
+
+def test_intraday_daily_limits():
+    from trade_analysis.backtest import IntradayRules
+    rules = IntradayRules(max_loss_day_r=1.0)
+    # chaque signal perd 1R (bougie qui touche le stop) -> 2e signal du jour refusé
+    rows = [[100, 101, 99, 100], [100, 100.5, 94, 95]] * 6
+    ltf = _bars(rows, start="2026-01-05 10:00")
+    sigs = [_sig(ltf.index[1]), _sig(ltf.index[5])]
+    trades = run_backtest(ltf, sigs, intraday=rules)
+    assert len(trades) == 1 and trades[0].outcome == "sl"

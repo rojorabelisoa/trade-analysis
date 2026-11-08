@@ -63,6 +63,25 @@ donc trop peu de trades. Commence par **H4/15m**, qui couvre environ 3 fois plus
 de jours. Pour plusieurs années en 5m, il faudra une source de données CME
 dédiée et le backtest Python.
 
+## Mode intraday (scalping)
+
+Il est activé par défaut dans le Pine (groupe « 4b. Intraday ») et disponible
+avec `--intraday` en Python :
+
+- les entrées ne sont autorisées qu'entre **07:00 et 19:00 UTC** ;
+- toute position est fermée à **20:45 UTC**, avant la pause CME de l'or
+  (22:00 UTC en hiver, 21:00 UTC en été). Aucune position ne passe la nuit ;
+- **3 trades maximum par jour**, et plus aucune entrée après **−2 R** dans la journée.
+
+Le diagnostic affiche la répartition des sorties (objectif / stop / fin de
+journée) et la durée moyenne d'un trade. Si beaucoup de trades sortent en
+« fin de journée », l'objectif est trop loin pour de l'intraday.
+
+**Attention aux frais en scalping :** sur GC, un aller-retour coûte environ
+45 $ (2 × 2,5 $ de commission + 2 × 2 ticks de glissement à 10 $). Avec un stop
+de 3 $ (300 $ par contrat), cela représente déjà 0,15 R par trade. Plus le stop
+est serré, plus les frais mangent l'avantage.
+
 ## Installation
 
 ```bash
