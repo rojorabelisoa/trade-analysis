@@ -14,8 +14,8 @@
 strategy("S/R → Liquidation → Entrée", shorttitle = "SR-Liq", overlay = true,
      initial_capital = 100000, default_qty_type = strategy.fixed, default_qty_value = 1,
      commission_type = strategy.commission.cash_per_contract, commission_value = 2.5,
-     slippage = 2, pyramiding = 0, margin_long = 5, margin_short = 5, max_boxes_count = 500, max_lines_count = 500,
-     max_labels_count = 500, max_bars_back = 500)
+     slippage = 2, pyramiding = 0, margin_long = 5, margin_short = 5, max_boxes_count = 300, max_lines_count = 300,
+     max_labels_count = 300)
 
 // ───────────────────────────── Paramètres ─────────────────────────────
 grpCtx = "1. Zones S/R (contexte HTF)"
@@ -246,7 +246,7 @@ f_addZone(float p, int kind, int pt, float tol, float maxW) =>
         zTouch.push(1)
         zLast.push(pt)
         zKind.push(kind)
-        if zLow.size() > 200
+        if zLow.size() > 80
             zLow.shift()
             zHigh.shift()
             zTouch.shift()
@@ -338,6 +338,15 @@ minOfDay = hour(nowT, "UTC") * 60 + minute(nowT, "UTC")
 inEntryWindow = minOfDay >= entryStartH * 60 and minOfDay < entryEndH * 60
 okDay = not intraday or (inEntryWindow and tradesToday < maxTradesDay and dayR > -maxLossDayR)
 
+// Dernière bougie opposée depuis la liquidation (zone de mitigation), suivie sans remonter l'historique
+var float obHi  = na
+var float obLo  = na
+var int   obBar = na
+if pDir != 0 and ((pDir == 1 and close < open) or (pDir == -1 and close > open))
+    obHi  := high
+    obLo  := low
+    obBar := bar_index
+
 // 1) Confirmation d'un sweep en attente
 if ready and pDir != 0
     if bar_index - pBar > confirmBars
@@ -370,15 +379,9 @@ if ready and pDir != 0
             sigLong   := pDir == 1
             sigShort  := pDir == -1
             // Zone de mitigation : dernière bougie opposée avant l'impulsion (order block)
-            if showMitig
-                int obK = -1
-                for k = 0 to bar_index - pBar
-                    if (pDir == 1 and close[k] < open[k]) or (pDir == -1 and close[k] > open[k])
-                        obK := k
-                        break
-                if obK >= 0
-                    mCol = pDir == 1 ? color.new(color.teal, 0) : color.new(color.maroon, 0)
-                    box.new(bar_index - obK, high[obK], bar_index + mitigBars, low[obK], border_color = color.new(mCol, 30),
+            if showMitig and not na(obBar)
+                mCol = pDir == 1 ? color.new(color.teal, 0) : color.new(color.maroon, 0)
+                box.new(obBar, obHi, bar_index + mitigBars, obLo, border_color = color.new(mCol, 30),
                          bgcolor = color.new(mCol, 82), border_style = line.style_dotted,
                          text = "Mitigation", text_size = size.tiny, text_color = mCol, text_halign = text.align_right)
         pDir      := 0
@@ -417,6 +420,11 @@ if ready and pDir == 0 and not confirmed and zLow.size() > 0
     sweepL := pDir == 1
     sweepS := pDir == -1
     cSweep += pDir != 0 ? 1 : 0
+    if pDir != 0
+        isOpp = (pDir == 1 and close < open) or (pDir == -1 and close > open)
+        obHi  := isOpp ? high : na
+        obLo  := isOpp ? low : na
+        obBar := isOpp ? bar_index : na
     // Liquidité prise : de la limite de la zone jusqu'à la mèche
     if showLiq and pDir != 0
         lCol = pDir == 1 ? color.new(color.aqua, 0) : color.new(color.fuchsia, 0)
