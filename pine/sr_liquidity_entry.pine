@@ -1,7 +1,7 @@
 // This Pine Script® code is subject to the terms of the Mozilla Public License 2.0
 // https://mozilla.org/MPL/2.0/
 //
-// Zone S/R (HTF) -> Liquidation (sweep LTF) -> Entrée (CHOCH LTF)
+// Tendance H4 -> Zone S/R (HTF) -> Liquidation (sweep LTF) -> Entrée (CHOCH LTF) dans le sens de la tendance
 // Même logique que trade_analysis/strategy.py (version Python).
 //
 // Utilisation :
@@ -55,8 +55,8 @@ grpF = "5. Fondamental & filtres"
 biasStr      = input.text_area("", "Biais fondamental", group = grpF, tooltip = "Format date:sens séparés par ; (ordre chronologique).\nEx : 2026-01-12:long;2026-01-26:short;2026-02-09:neutral\nSens : long, short, neutral, off. Vide = neutre partout. Avant la 1re date = off.")
 neutralBoth  = input.bool(true, "Biais neutre = les deux sens autorisés", group = grpF)
 dirMode      = input.string("Les deux", "Sens autorisés", options = ["Les deux", "Long seulement", "Short seulement"], group = grpF)
-trendFilter  = input.bool(false, "Filtre tendance : suivre la moyenne mobile HTF", group = grpF, tooltip = "Achats seulement au-dessus de la moyenne mobile du timeframe contexte, ventes seulement en dessous. « Trade avec la tendance ».")
-trendLen     = input.int(50, "Longueur de la moyenne mobile HTF", minval = 5, group = grpF)
+trendMode    = input.string("Structure (BOS / CHOCH)", "Tendance du timeframe contexte (H4)", options = ["Structure (BOS / CHOCH)", "Structure stricte (HH+HL / LH+LL)", "Moyenne mobile", "Désactivée"], group = grpF, tooltip = "On ne trade QUE dans le sens de la tendance H4.\n• Structure (BOS / CHOCH) : haussière dès qu'une bougie H4 clôture au-dessus du dernier sommet, baissière dès qu'elle clôture sous le dernier creux.\n• Stricte : haussière seulement si les 2 derniers sommets ET creux montent (HH + HL), baissière s'ils descendent (LH + LL), sinon range = pas de trade.\n• Moyenne mobile : au-dessus = haussière, en dessous = baissière.")
+trendLen     = input.int(50, "Longueur de la moyenne mobile (si choisie)", minval = 5, group = grpF)
 newsStr      = input.text_area("", "Annonces fort impact (heure UTC)", group = grpF, tooltip = "Une par ligne ou séparées par ;\nEx : 2026-01-13 13:30\nSur investing.com, règle le fuseau sur GMT.")
 newsBefore   = input.int(30, "Minutes bloquées avant annonce", minval = 0, group = grpF)
 newsAfter    = input.int(30, "Minutes bloquées après annonce", minval = 0, group = grpF)
@@ -70,6 +70,7 @@ grpV = "6. Affichage"
 showZones    = input.bool(true, "Afficher les zones", group = grpV)
 showLevels   = input.bool(true, "Afficher stop / objectif", group = grpV)
 showFunnel   = input.bool(true, "Afficher le diagnostic", group = grpV)
+showTrendBg  = input.bool(true, "Colorer le fond selon la tendance H4", group = grpV)
 atrLen       = 14
 
 if timeframe.in_seconds() >= timeframe.in_seconds(htfTf)
@@ -106,9 +107,26 @@ f_htf() =>
     pl = f_pl(htfL, htfR)
     a  = ta.atr(atrLen)
     e  = ta.ema(close, trendLen)
-    [ph[1], pl[1], time[htfR + 1], a[1], time[1], e[1]]
+    // Structure de marché H4 (jours 3, 5 et 7 des notes)
+    var float lastH = na
+    var float prevH = na
+    var float lastL = na
+    var float prevL = na
+    var int   trBos = 0
+    if not na(ph)
+        prevH := lastH
+        lastH := ph
+    if not na(pl)
+        prevL := lastL
+        lastL := pl
+    if not na(lastH) and close > lastH
+        trBos := 1
+    if not na(lastL) and close < lastL
+        trBos := -1
+    trStrict = na(prevH) or na(prevL) ? 0 : lastH > prevH and lastL > prevL ? 1 : lastH < prevH and lastL < prevL ? -1 : 0
+    [ph[1], pl[1], time[htfR + 1], a[1], time[1], e[1], trBos[1], trStrict[1]]
 
-[hPH, hPL, hPivT, hATR, hBarT, hEma] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
+[hPH, hPL, hPivT, hATR, hBarT, hEma, hTrBos, hTrStrict] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
 newHtf = not na(hBarT) and (na(hBarT[1]) or hBarT != hBarT[1])
 
 // ───────────────────────────── Biais & annonces ─────────────────────────────
@@ -256,6 +274,15 @@ float sigStop   = na
 float sigTarget = na
 
 ready     = not na(hATR) and not na(ltfATR) and bar_index > 0
+
+// Tendance H4 en vigueur : 1 = haussière, -1 = baissière, 0 = range / inconnue
+htfTrend = switch trendMode
+    "Structure (BOS / CHOCH)"            => nz(hTrBos)
+    "Structure stricte (HH+HL / LH+LL)"  => nz(hTrStrict)
+    "Moyenne mobile"                     => na(hEma) ? 0 : close > hEma ? 1 : -1
+    => 0
+allowLong  = (trendMode == "Désactivée" or htfTrend == 1) and dirMode != "Short seulement"
+allowShort = (trendMode == "Désactivée" or htfTrend == -1) and dirMode != "Long seulement"
 prevClose = close[1]
 
 // Entonnoir de diagnostic : où les signaux sont-ils perdus ?
@@ -305,7 +332,7 @@ if ready and pDir != 0
         cRisk += okBias and okNews and okSess and not okRisk ? 1 : 0
         cDay  += okBias and okNews and okSess and okRisk and not okDay ? 1 : 0
         okMode  = dirMode == "Les deux" or (dirMode == "Long seulement" and pDir == 1) or (dirMode == "Short seulement" and pDir == -1)
-        okTrend = not trendFilter or na(hEma) or (pDir == 1 and close > hEma) or (pDir == -1 and close < hEma)
+        okTrend = trendMode == "Désactivée" or htfTrend == pDir
         okDir   = okMode and okTrend
         cDir  += okBias and okNews and okSess and okRisk and okDay and not okDir ? 1 : 0
         if okBias and okNews and okSess and okRisk and okDay and okDir
@@ -326,7 +353,7 @@ if ready and pDir == 0 and not confirmed and zLow.size() > 0
             lo = zLow.get(i)
             hi = zHigh.get(i)
             penL = lo - low
-            if prevClose > lo and penL >= sweepMinAtr * ltfATR and penL <= sweepMaxAtr * hATR and close > lo and not na(lastHigh) and lastHigh > close
+            if allowLong and prevClose > lo and penL >= sweepMinAtr * ltfATR and penL <= sweepMaxAtr * hATR and close > lo and not na(lastHigh) and lastHigh > close
                 if bestT == -1 or t > bestT
                     pDir  := 1
                     pExt  := low
@@ -337,7 +364,7 @@ if ready and pDir == 0 and not confirmed and zLow.size() > 0
                     pZT   := t
                     bestT := t
             penH = high - hi
-            if prevClose < hi and penH >= sweepMinAtr * ltfATR and penH <= sweepMaxAtr * hATR and close < hi and not na(lastLow) and lastLow < close
+            if allowShort and prevClose < hi and penH >= sweepMinAtr * ltfATR and penH <= sweepMaxAtr * hATR and close < hi and not na(lastLow) and lastLow < close
                 if bestT == -1 or t > bestT
                     pDir  := -1
                     pExt  := high
@@ -432,7 +459,7 @@ if strategy.closedtrades > seen
                 worstSt := math.max(worstSt, streak)
     seen := strategy.closedtrades
 
-var table tb = table.new(position.top_right, 2, 24, bgcolor = color.new(color.black, 15), border_width = 1)
+var table tb = table.new(position.top_right, 2, 25, bgcolor = color.new(color.black, 15), border_width = 1)
 if barstate.islast
     txt = color.white
     table.cell(tb, 0, 0, "Trades", text_color = txt)
@@ -489,8 +516,12 @@ if barstate.islast
     table.cell(tb, 1, 22, nL > 0 ? str.tostring(100.0 * nLW / nL, "0") + " % · " + str.tostring(rL, "0.0") + " R" : "-", text_color = rL > 0 ? color.lime : color.red)
     table.cell(tb, 0, 23, "Short : " + str.tostring(nS) + " trades", text_color = txt)
     table.cell(tb, 1, 23, nS > 0 ? str.tostring(100.0 * nSW / nS, "0") + " % · " + str.tostring(rS, "0.0") + " R" : "-", text_color = rS > 0 ? color.lime : color.red)
+    trTxt = htfTrend == 1 ? "HAUSSIÈRE" : htfTrend == -1 ? "BAISSIÈRE" : trendMode == "Désactivée" ? "filtre désactivé" : "RANGE"
+    table.cell(tb, 0, 24, "Tendance " + htfTf + " actuelle", text_color = txt)
+    table.cell(tb, 1, 24, trTxt, text_color = htfTrend == 1 ? color.lime : htfTrend == -1 ? color.red : color.gray)
 
 // ───────────────────────────── Affichage ─────────────────────────────
+bgcolor(showTrendBg and trendMode != "Désactivée" ? (htfTrend == 1 ? color.new(color.green, 93) : htfTrend == -1 ? color.new(color.red, 93) : na) : na, title = "Tendance H4")
 plotshape(sweepL, "Liquidation haussière", shape.xcross, location.belowbar, color.new(color.teal, 0), size = size.tiny)
 plotshape(sweepS, "Liquidation baissière", shape.xcross, location.abovebar, color.new(color.maroon, 0), size = size.tiny)
 plotshape(sigLong, "Signal achat", shape.triangleup, location.belowbar, color.lime, size = size.small, text = "BUY")

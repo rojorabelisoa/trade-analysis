@@ -144,3 +144,27 @@ def test_intraday_daily_limits():
     sigs = [_sig(ltf.index[1]), _sig(ltf.index[5])]
     trades = run_backtest(ltf, sigs, intraday=rules)
     assert len(trades) == 1 and trades[0].outcome == "sl"
+
+
+def test_trend_filter_only_with_trend():
+    from trade_analysis.strategy import htf_trend
+    from trade_analysis.structure import find_pivots
+    ltf = synthetic_5m()
+    htf = resample(ltf, "1h")
+    cfg = Config(htf_pivot_left=3, htf_pivot_right=3)
+    sigs = generate_signals(htf, ltf, "GC", cfg)
+    dur = pd.Timedelta(hours=1)
+    tr = htf_trend(htf, find_pivots(htf, 3, 3, dur), dur, "structure")
+    assert sigs
+    for s in sigs:
+        k = tr.index.searchsorted(s.time, side="right") - 1
+        assert tr["bos"].iloc[k] == (1 if s.direction == "long" else -1)
+    off = generate_signals(htf, ltf, "GC", Config(htf_pivot_left=3, htf_pivot_right=3, trend_mode="off"))
+    assert len(off) >= len(sigs)
+
+
+def test_direction_long_only():
+    ltf = synthetic_5m()
+    htf = resample(ltf, "1h")
+    sigs = generate_signals(htf, ltf, "GC", Config(trend_mode="off", direction="long"))
+    assert sigs and all(s.direction == "long" for s in sigs)

@@ -39,7 +39,8 @@ def _load(args) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 def _config(args) -> Config:
     cfg = Config(rr=args.rr, min_touches=args.min_touches,
-                 neutral_allows_both=not args.neutral_blocks)
+                 neutral_allows_both=not args.neutral_blocks,
+                 trend_mode=args.trend, direction=args.direction)
     if args.sessions:
         cfg.sessions = tuple(s.strip() for s in args.sessions.split(","))
     return cfg
@@ -62,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--rr", type=float, default=2.0)
         sp.add_argument("--min-touches", type=int, default=2)
         sp.add_argument("--sessions", help="ex: londres,overlap_londres_ny")
+        sp.add_argument("--trend", choices=["structure", "strict", "ema", "off"], default="structure",
+                        help="tendance HTF : on ne trade que dans son sens (défaut : structure BOS/CHOCH)")
+        sp.add_argument("--direction", choices=["both", "long", "short"], default="both")
         sp.add_argument("--neutral-blocks", action="store_true",
                         help="biais 'neutral' = pas de trade (défaut : les deux sens)")
         sp.add_argument("--decimals", type=int, default=2)

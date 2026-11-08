@@ -1,4 +1,12 @@
-"""Moteur de signaux : Zone S/R (HTF) -> Liquidation (sweep LTF) -> Entrée (CHOCH LTF).
+"""Moteur de signaux : Tendance H4 -> Zone S/R (HTF) -> Liquidation (sweep LTF) -> Entrée (CHOCH LTF).
+
+0. TENDANCE HTF (on ne trade que dans son sens) :
+   - "structure" : haussière dès qu'une bougie HTF clôture au-dessus du dernier
+     swing high confirmé (BOS/CHOCH), baissière dès qu'elle clôture sous le dernier swing low ;
+   - "strict" : haussière si les 2 derniers sommets ET creux montent (HH+HL),
+     baissière s'ils descendent (LH+LL), sinon range = pas de trade ;
+   - "ema" : clôture LTF au-dessus / en dessous de la moyenne mobile HTF ;
+   - "off" : pas de filtre.
 
 Définitions objectives utilisées (toutes réglables dans `Config`) :
 
@@ -54,6 +62,9 @@ class Config:
     max_risk_htf_atr: float = 1.5
     # Filtres
     neutral_allows_both: bool = True
+    trend_mode: str = "structure"  # "structure" | "strict" | "ema" | "off"
+    trend_len: int = 50
+    direction: str = "both"  # "both" | "long" | "short"
     sessions: tuple[str, ...] | None = None  # ex: ("londres", "overlap_londres_ny")
     atr_period: int = 14
 
@@ -82,6 +93,44 @@ class Signal:
         return asdict(self)
 
 
+def htf_trend(htf: pd.DataFrame, pivots: list[Pivot], dur: pd.Timedelta,
+              mode: str, ema_len: int = 50) -> pd.DataFrame:
+    """Tendance HTF connue à la clôture de chaque bougie HTF (index = heure de clôture).
+
+    Colonnes : `bos` (1/-1/0), `strict` (1/-1/0), `ema` (valeur de la moyenne).
+    """
+    closes = htf["close"].to_numpy()
+    close_times = htf.index + dur
+    last_h = prev_h = last_l = prev_l = None
+    tr_bos = 0
+    p_i = 0
+    bos, strict = [], []
+    for i in range(len(htf)):
+        while p_i < len(pivots) and pivots[p_i].confirmed_at <= close_times[i]:
+            p = pivots[p_i]
+            if p.kind == "high":
+                prev_h, last_h = last_h, p.price
+            else:
+                prev_l, last_l = last_l, p.price
+            p_i += 1
+        if last_h is not None and closes[i] > last_h:
+            tr_bos = 1
+        if last_l is not None and closes[i] < last_l:
+            tr_bos = -1
+        if None in (prev_h, prev_l):
+            st = 0
+        elif last_h > prev_h and last_l > prev_l:
+            st = 1
+        elif last_h < prev_h and last_l < prev_l:
+            st = -1
+        else:
+            st = 0
+        bos.append(tr_bos)
+        strict.append(st)
+    ema = htf["close"].ewm(span=ema_len, adjust=False).mean().to_numpy()
+    return pd.DataFrame({"bos": bos, "strict": strict, "ema": ema}, index=close_times)
+
+
 def _bar_duration(df: pd.DataFrame) -> pd.Timedelta:
     from .data import infer_bar_duration
 
@@ -108,6 +157,9 @@ def generate_signals(
     ltf_atr = atr(ltf, cfg.atr_period)
 
     htf_pivots = find_pivots(htf, cfg.htf_pivot_left, cfg.htf_pivot_right, htf_dur)
+    trend_df = htf_trend(htf, htf_pivots, htf_dur, cfg.trend_mode, cfg.trend_len)
+    trend_times = trend_df.index
+    trend_bos, trend_strict, trend_ema = (trend_df[k].to_numpy() for k in ("bos", "strict", "ema"))
     ltf_pivots = find_pivots(ltf, cfg.ltf_pivot_left, cfg.ltf_pivot_right, ltf_dur)
 
     book = ZoneBook(max_age=htf_dur * cfg.zone_max_age_bars)
@@ -150,6 +202,19 @@ def generate_signals(
         if a_htf is None or pd.isna(a_ltf[i]):
             continue
 
+        # Tendance HTF en vigueur (dernière bougie HTF clôturée)
+        kt = trend_times.searchsorted(close_time, side="right") - 1
+        if cfg.trend_mode == "off" or kt < 0:
+            trend = 0
+        elif cfg.trend_mode == "structure":
+            trend = int(trend_bos[kt])
+        elif cfg.trend_mode == "strict":
+            trend = int(trend_strict[kt])
+        else:
+            trend = 1 if c[i] > trend_ema[kt] else -1
+        allow_long = (cfg.trend_mode == "off" or trend == 1) and cfg.direction != "short"
+        allow_short = (cfg.trend_mode == "off" or trend == -1) and cfg.direction != "long"
+
         # 1) Confirmation d'un sweep en attente
         if pending is not None:
             if i - pending["bar"] > cfg.confirm_bars:
@@ -164,8 +229,9 @@ def generate_signals(
                 elif (d == "long" and c[i] > pending["trigger"]) or (
                     d == "short" and c[i] < pending["trigger"]
                 ):
+                    ok_dir = allow_long if d == "long" else allow_short
                     sig = _build_signal(pending, i, c[i], a_ltf[i], a_htf, close_time,
-                                        symbol, cfg, bias, news, book)
+                                        symbol, cfg, bias, news, book) if ok_dir else None
                     if sig is not None:
                         signals.append(sig)
                     pending = None
@@ -175,18 +241,19 @@ def generate_signals(
         if pending is None:
             pending = _detect_sweep(book.active(cfg.min_touches), i, h, l, c,
                                     a_ltf[i], a_htf, cfg, last_ltf_high, last_ltf_low,
-                                    times[i])
+                                    times[i], allow_long, allow_short)
     return signals
 
 
 def _detect_sweep(zones: list[Zone], i, h, l, c, a_ltf, a_htf, cfg: Config,
                   last_high: Pivot | None, last_low: Pivot | None,
-                  t: pd.Timestamp) -> dict | None:
+                  t: pd.Timestamp, allow_long: bool = True,
+                  allow_short: bool = True) -> dict | None:
     best = None
     for z in zones:
         # Sweep haussier sous la zone
         pen = z.low - l[i]
-        if (c[i - 1] > z.low and pen >= cfg.sweep_min_atr * a_ltf
+        if (allow_long and c[i - 1] > z.low and pen >= cfg.sweep_min_atr * a_ltf
                 and pen <= cfg.sweep_max_atr * a_htf and c[i] > z.low
                 and last_high is not None and last_high.price > c[i]):
             cand = dict(direction="long", zone=z, extreme=l[i], bar=i, time=t,
@@ -195,7 +262,7 @@ def _detect_sweep(zones: list[Zone], i, h, l, c, a_ltf, a_htf, cfg: Config,
                 best = cand
         # Sweep baissier au-dessus de la zone
         pen = h[i] - z.high
-        if (c[i - 1] < z.high and pen >= cfg.sweep_min_atr * a_ltf
+        if (allow_short and c[i - 1] < z.high and pen >= cfg.sweep_min_atr * a_ltf
                 and pen <= cfg.sweep_max_atr * a_htf and c[i] < z.high
                 and last_low is not None and last_low.price < c[i]):
             cand = dict(direction="short", zone=z, extreme=h[i], bar=i, time=t,

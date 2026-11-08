@@ -1,7 +1,7 @@
 # trade-analysis
 
 Détecteur de signaux d'entrée sur l'or et les matières premières (futures CME
-via TradingView), avec la logique **Zone S/R → Liquidation → Entrée**, filtrée
+via TradingView), avec la logique **Tendance H4 → Zone S/R → Liquidation → Entrée dans le sens de la tendance**, filtrée
 par ton **biais fondamental** et le **calendrier économique**, plus un **backtest
 prudent** pour vérifier qu'il y a un avantage *avant* de partager quoi que ce soit.
 
@@ -9,6 +9,7 @@ prudent** pour vérifier qu'il y a un avantage *avant* de partager quoi que ce s
 
 | Étape | Timeframe | Règle codée |
 |---|---|---|
+| **Tendance** | H4 (ou H1) | On ne trade **que dans le sens de la tendance**. Par défaut, la structure : haussière dès qu'une bougie H4 clôture au-dessus du dernier sommet (BOS/CHOCH), baissière dès qu'elle clôture sous le dernier creux. Variantes : « stricte » (HH+HL / LH+LL, sinon range = pas de trade) et moyenne mobile. |
 | Contexte | H1 ou H4 | Swings (5 bougies de chaque côté), regroupés en zones si écart < 0,35 × ATR. Zone valide si ≥ 2 contacts. |
 | Liquidation | 5m ou 15m | La mèche dépasse la zone d'au moins 0,2 × ATR(LTF), mais de moins de 1 × ATR(HTF) (au-delà, c'est une vraie cassure), puis la bougie **clôture de nouveau dans la zone**. |
 | Entrée | 5m ou 15m | Dans les 12 bougies suivantes, une **clôture** casse le dernier swing LTF opposé (CHOCH). Le sweep est annulé si le prix repasse sous sa mèche. |
