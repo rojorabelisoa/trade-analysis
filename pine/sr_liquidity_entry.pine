@@ -54,6 +54,9 @@ maxLossDayR  = input.float(2.0, "Stop journalier (perte max en R)", step = 0.5, 
 grpF = "5. Fondamental & filtres"
 biasStr      = input.text_area("", "Biais fondamental", group = grpF, tooltip = "Format date:sens séparés par ; (ordre chronologique).\nEx : 2026-01-12:long;2026-01-26:short;2026-02-09:neutral\nSens : long, short, neutral, off. Vide = neutre partout. Avant la 1re date = off.")
 neutralBoth  = input.bool(true, "Biais neutre = les deux sens autorisés", group = grpF)
+dirMode      = input.string("Les deux", "Sens autorisés", options = ["Les deux", "Long seulement", "Short seulement"], group = grpF)
+trendFilter  = input.bool(false, "Filtre tendance : suivre la moyenne mobile HTF", group = grpF, tooltip = "Achats seulement au-dessus de la moyenne mobile du timeframe contexte, ventes seulement en dessous. « Trade avec la tendance ».")
+trendLen     = input.int(50, "Longueur de la moyenne mobile HTF", minval = 5, group = grpF)
 newsStr      = input.text_area("", "Annonces fort impact (heure UTC)", group = grpF, tooltip = "Une par ligne ou séparées par ;\nEx : 2026-01-13 13:30\nSur investing.com, règle le fuseau sur GMT.")
 newsBefore   = input.int(30, "Minutes bloquées avant annonce", minval = 0, group = grpF)
 newsAfter    = input.int(30, "Minutes bloquées après annonce", minval = 0, group = grpF)
@@ -102,9 +105,10 @@ f_htf() =>
     ph = f_ph(htfL, htfR)
     pl = f_pl(htfL, htfR)
     a  = ta.atr(atrLen)
-    [ph[1], pl[1], time[htfR + 1], a[1], time[1]]
+    e  = ta.ema(close, trendLen)
+    [ph[1], pl[1], time[htfR + 1], a[1], time[1], e[1]]
 
-[hPH, hPL, hPivT, hATR, hBarT] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
+[hPH, hPL, hPivT, hATR, hBarT, hEma] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
 newHtf = not na(hBarT) and (na(hBarT[1]) or hBarT != hBarT[1])
 
 // ───────────────────────────── Biais & annonces ─────────────────────────────
@@ -266,6 +270,7 @@ var int cRisk    = 0
 var int cBusy    = 0
 var int cSignal  = 0
 var int cDay     = 0
+var int cDir     = 0
 
 // Journée de trading (UTC) : compteurs remis à zéro chaque jour
 dayKey = year(time, "UTC") * 10000 + month(time, "UTC") * 100 + dayofmonth(time, "UTC")
@@ -299,7 +304,11 @@ if ready and pDir != 0
         cSess += okBias and okNews and not okSess ? 1 : 0
         cRisk += okBias and okNews and okSess and not okRisk ? 1 : 0
         cDay  += okBias and okNews and okSess and okRisk and not okDay ? 1 : 0
-        if okBias and okNews and okSess and okRisk and okDay
+        okMode  = dirMode == "Les deux" or (dirMode == "Long seulement" and pDir == 1) or (dirMode == "Short seulement" and pDir == -1)
+        okTrend = not trendFilter or na(hEma) or (pDir == 1 and close > hEma) or (pDir == -1 and close < hEma)
+        okDir   = okMode and okTrend
+        cDir  += okBias and okNews and okSess and okRisk and okDay and not okDir ? 1 : 0
+        if okBias and okNews and okSess and okRisk and okDay and okDir
             cSignal += 1
             sigStop   := stp
             sigTarget := pDir == 1 ? close + rr * risk : close - rr * risk
@@ -385,6 +394,12 @@ var int   seen    = 0
 var int   nTP     = 0
 var int   nSL     = 0
 var int   nEOD    = 0
+var int   nL      = 0
+var int   nLW     = 0
+var float rL      = 0.0
+var int   nS      = 0
+var int   nSW     = 0
+var float rS      = 0.0
 var float holdMin = 0.0
 
 if strategy.closedtrades > seen
@@ -403,6 +418,13 @@ if strategy.closedtrades > seen
                 nTrades += 1
                 sumR    += r
                 nWins   += r > 0 ? 1 : 0
+                isLong   = strategy.closedtrades.size(k) > 0
+                nL      += isLong ? 1 : 0
+                nLW     += isLong and r > 0 ? 1 : 0
+                rL      += isLong ? r : 0.0
+                nS      += isLong ? 0 : 1
+                nSW     += not isLong and r > 0 ? 1 : 0
+                rS      += isLong ? 0.0 : r
                 eqR     += r
                 peakR   := math.max(peakR, eqR)
                 maxDD   := math.min(maxDD, eqR - peakR)
@@ -410,7 +432,7 @@ if strategy.closedtrades > seen
                 worstSt := math.max(worstSt, streak)
     seen := strategy.closedtrades
 
-var table tb = table.new(position.top_right, 2, 21, bgcolor = color.new(color.black, 15), border_width = 1)
+var table tb = table.new(position.top_right, 2, 24, bgcolor = color.new(color.black, 15), border_width = 1)
 if barstate.islast
     txt = color.white
     table.cell(tb, 0, 0, "Trades", text_color = txt)
@@ -461,6 +483,12 @@ if barstate.islast
         table.cell(tb, 1, 19, str.tostring(nTP) + " / " + str.tostring(nSL) + " / " + str.tostring(nEOD), text_color = dim)
         table.cell(tb, 0, 20, "Durée moyenne", text_color = dim)
         table.cell(tb, 1, 20, nTrades > 0 ? str.tostring(holdMin / nTrades, "0") + " min" : "-", text_color = dim)
+        table.cell(tb, 0, 21, "– bloqués sens / tendance", text_color = dim)
+        table.cell(tb, 1, 21, str.tostring(cDir), text_color = dim)
+    table.cell(tb, 0, 22, "Long : " + str.tostring(nL) + " trades", text_color = txt)
+    table.cell(tb, 1, 22, nL > 0 ? str.tostring(100.0 * nLW / nL, "0") + " % · " + str.tostring(rL, "0.0") + " R" : "-", text_color = rL > 0 ? color.lime : color.red)
+    table.cell(tb, 0, 23, "Short : " + str.tostring(nS) + " trades", text_color = txt)
+    table.cell(tb, 1, 23, nS > 0 ? str.tostring(100.0 * nSW / nS, "0") + " % · " + str.tostring(rS, "0.0") + " R" : "-", text_color = rS > 0 ? color.lime : color.red)
 
 // ───────────────────────────── Affichage ─────────────────────────────
 plotshape(sweepL, "Liquidation haussière", shape.xcross, location.belowbar, color.new(color.teal, 0), size = size.tiny)
