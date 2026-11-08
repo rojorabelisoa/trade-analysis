@@ -144,7 +144,10 @@ def generate_signals(
     cfg: Config | None = None,
     bias: BiasBook | None = None,
     news: NewsCalendar | None = None,
+    trend_htf: pd.DataFrame | None = None,
 ) -> list[Signal]:
+    """`htf` = timeframe des zones S/R (ex. H1) ; `trend_htf` = timeframe de la
+    tendance (ex. H4). Sans `trend_htf`, la tendance est lue sur `htf`."""
     cfg = cfg or Config()
     bias = bias or BiasBook(None, symbol)
     news = news or NewsCalendar(None, pd.Timedelta(0), pd.Timedelta(0))
@@ -157,7 +160,12 @@ def generate_signals(
     ltf_atr = atr(ltf, cfg.atr_period)
 
     htf_pivots = find_pivots(htf, cfg.htf_pivot_left, cfg.htf_pivot_right, htf_dur)
-    trend_df = htf_trend(htf, htf_pivots, htf_dur, cfg.trend_mode, cfg.trend_len)
+    if trend_htf is None:
+        trend_df = htf_trend(htf, htf_pivots, htf_dur, cfg.trend_mode, cfg.trend_len)
+    else:
+        t_dur = _bar_duration(trend_htf)
+        t_piv = find_pivots(trend_htf, cfg.htf_pivot_left, cfg.htf_pivot_right, t_dur)
+        trend_df = htf_trend(trend_htf, t_piv, t_dur, cfg.trend_mode, cfg.trend_len)
     trend_times = trend_df.index
     trend_bos, trend_strict, trend_ema = (trend_df[k].to_numpy() for k in ("bos", "strict", "ema"))
     ltf_pivots = find_pivots(ltf, cfg.ltf_pivot_left, cfg.ltf_pivot_right, ltf_dur)

@@ -1,7 +1,7 @@
 // This Pine Script® code is subject to the terms of the Mozilla Public License 2.0
 // https://mozilla.org/MPL/2.0/
 //
-// Tendance H4 -> Zone S/R (HTF) -> Liquidation (sweep LTF) -> Entrée (CHOCH LTF) dans le sens de la tendance
+// Tendance H4 -> Zone S/R (H1) -> Liquidation (sweep LTF) -> Entrée (CHOCH LTF) dans le sens de la tendance
 // Même logique que trade_analysis/strategy.py (version Python).
 //
 // Utilisation :
@@ -18,8 +18,9 @@ strategy("S/R → Liquidation → Entrée", shorttitle = "SR-Liq", overlay = tru
      max_labels_count = 300)
 
 // ───────────────────────────── Paramètres ─────────────────────────────
-grpCtx = "1. Zones S/R (contexte HTF)"
-htfTf        = input.timeframe("60", "Timeframe contexte", group = grpCtx, tooltip = "60 = H1 (graphique 5m) · 240 = H4 (graphique 15m)")
+grpCtx = "1. Tendance et zones S/R (top-down)"
+trendTf      = input.timeframe("240", "Timeframe de la TENDANCE", group = grpCtx, tooltip = "Décide du sens : on n'achète qu'en tendance haussière, on ne vend qu'en tendance baissière. 240 = H4.")
+htfTf        = input.timeframe("60", "Timeframe des ZONES S/R", group = grpCtx, tooltip = "Où chercher les supports / résistances et les liquidations. 60 = H1. Graphique (entrée) : 15m ou 5m.")
 htfL         = input.int(5, "Pivot HTF : bougies à gauche", minval = 1, group = grpCtx)
 htfR         = input.int(5, "Pivot HTF : bougies à droite", minval = 1, group = grpCtx)
 zoneMergeAtr = input.float(0.35, "Fusion des pivots (× ATR HTF)", step = 0.05, group = grpCtx)
@@ -77,8 +78,8 @@ showMitig    = input.bool(true, "Zones de mitigation (order block avant l'entré
 mitigBars    = input.int(30, "Longueur d'une zone de mitigation (bougies)", minval = 5, group = grpV)
 atrLen       = 14
 
-if timeframe.in_seconds() >= timeframe.in_seconds(htfTf)
-    runtime.error("Le timeframe contexte doit être SUPÉRIEUR au timeframe du graphique (ex : graphique 5m, contexte 60).")
+if timeframe.in_seconds() >= timeframe.in_seconds(htfTf) or timeframe.in_seconds(htfTf) > timeframe.in_seconds(trendTf)
+    runtime.error("Ordre des timeframes attendu : graphique (entrée) < zones S/R <= tendance. Ex : graphique 15m, zones 60, tendance 240.")
 
 // ───────────────────────────── Outils ─────────────────────────────
 // Swing high : high > les L bougies avant ET >= les R bougies après.
@@ -154,7 +155,10 @@ f_htf() =>
     trStrict = na(prevH) or na(prevL) ? 0 : lastH > prevH and lastL > prevL ? 1 : lastH < prevH and lastL < prevL ? -1 : 0
     [ph[1], pl[1], time[htfR + 1], a[1], time[1], e[1], trBos[1], trStrict[1], evt[1], evtLvl[1], evtT[1]]
 
-[hPH, hPL, hPivT, hATR, hBarT, hEma, hTrBos, hTrStrict, hEvt, hEvtLvl, hEvtT] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
+[hPH, hPL, hPivT, hATR, hBarT, hEma0, hTrBos0, hTrStrict0, hEvt0, hEvtLvl0, hEvtT0] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
+// Tendance et structure sur le timeframe de tendance (H4)
+[tPH, tPL, tPivT, tATR, tBarT, hEma, hTrBos, hTrStrict, hEvt, hEvtLvl, hEvtT] = request.security(syminfo.tickerid, trendTf, f_htf(), lookahead = barmerge.lookahead_on)
+newTrendBar = not na(tBarT) and (na(tBarT[1]) or tBarT != tBarT[1])
 newHtf = not na(hBarT) and (na(hBarT[1]) or hBarT != hBarT[1])
 
 // ───────────────────────────── Biais & annonces ─────────────────────────────
@@ -452,7 +456,7 @@ if (sigLong or sigShort) and strategy.position_size == 0
          ',"stop":' + str.tostring(sigStop, format.mintick) + ',"target":' + str.tostring(sigTarget, format.mintick) +
          ',"rr":' + str.tostring(rr) + ',"zone":"' + str.tostring(pZLo, format.mintick) + '-' + str.tostring(pZHi, format.mintick) +
          '","contacts":' + str.tostring(pZT) + ',"sweep":' + str.tostring(pExt, format.mintick) +
-         ',"bias":"' + f_bias(nowT) + '","session":"' + f_session(nowT) + '","tf":"' + timeframe.period + '/' + htfTf + '"}'
+         ',"bias":"' + f_bias(nowT) + '","session":"' + f_session(nowT) + '","tf":"' + timeframe.period + '/' + htfTf + '/' + trendTf + '"}'
     alert(msg, alert.freq_once_per_bar_close)
 
 if strategy.position_size != 0 and bar_index - strategy.opentrades.entry_bar_index(0) >= maxHold
@@ -572,7 +576,7 @@ if barstate.islast
     table.cell(tb, 0, 23, "Short : " + str.tostring(nS) + " trades", text_color = txt)
     table.cell(tb, 1, 23, nS > 0 ? str.tostring(100.0 * nSW / nS, "0") + " % · " + str.tostring(rS, "0.0") + " R" : "-", text_color = rS > 0 ? color.lime : color.red)
     trTxt = htfTrend == 1 ? "HAUSSIÈRE" : htfTrend == -1 ? "BAISSIÈRE" : trendMode == "Désactivée" ? "filtre désactivé" : "RANGE"
-    table.cell(tb, 0, 24, "Tendance " + htfTf + " actuelle", text_color = txt)
+    table.cell(tb, 0, 24, "Tendance " + trendTf + " actuelle", text_color = txt)
     table.cell(tb, 1, 24, trTxt, text_color = htfTrend == 1 ? color.lime : htfTrend == -1 ? color.red : color.gray)
 
 // ───────────────────────────── Affichage ─────────────────────────────
@@ -589,24 +593,24 @@ if showLevels and (sigLong or sigShort)
 // Structure H4 : étiquettes HH / HL / LH / LL et cassures BOS / CHOCH
 var float prevPH = na
 var float prevPL = na
-if newHtf and showStruct
-    if not na(hPH)
+if newTrendBar and showStruct
+    if not na(tPH)
         if not na(prevPH)
-            isHH = hPH > prevPH
-            label.new(hPivT, hPH, isHH ? "HH" : "LH", xloc = xloc.bar_time, style = label.style_label_down,
+            isHH = tPH > prevPH
+            label.new(tPivT, tPH, isHH ? "HH" : "LH", xloc = xloc.bar_time, style = label.style_label_down,
                  color = color.new(color.black, 100), textcolor = isHH ? color.lime : color.orange, size = size.small)
-        prevPH := hPH
-    if not na(hPL)
+        prevPH := tPH
+    if not na(tPL)
         if not na(prevPL)
-            isHL = hPL > prevPL
-            label.new(hPivT, hPL, isHL ? "HL" : "LL", xloc = xloc.bar_time, style = label.style_label_up,
+            isHL = tPL > prevPL
+            label.new(tPivT, tPL, isHL ? "HL" : "LL", xloc = xloc.bar_time, style = label.style_label_up,
                  color = color.new(color.black, 100), textcolor = isHL ? color.lime : color.orange, size = size.small)
-        prevPL := hPL
+        prevPL := tPL
     if nz(hEvt) != 0 and not na(hEvtLvl) and not na(hEvtT)
         evCol = hEvt > 0 ? color.lime : color.red
-        line.new(hEvtT, hEvtLvl, hBarT, hEvtLvl, xloc = xloc.bar_time, color = evCol,
+        line.new(hEvtT, hEvtLvl, tBarT, hEvtLvl, xloc = xloc.bar_time, color = evCol,
              style = math.abs(hEvt) == 2 ? line.style_solid : line.style_dashed, width = math.abs(hEvt) == 2 ? 2 : 1)
-        label.new(hBarT, hEvtLvl, math.abs(hEvt) == 2 ? "CHOCH" : "BOS", xloc = xloc.bar_time,
+        label.new(tBarT, hEvtLvl, math.abs(hEvt) == 2 ? "CHOCH" : "BOS", xloc = xloc.bar_time,
              style = hEvt > 0 ? label.style_label_lower_left : label.style_label_upper_left,
              color = color.new(color.black, 100), textcolor = evCol, size = size.small)
 

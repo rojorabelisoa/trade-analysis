@@ -9,8 +9,8 @@ prudent** pour vérifier qu'il y a un avantage *avant* de partager quoi que ce s
 
 | Étape | Timeframe | Règle codée |
 |---|---|---|
-| **Tendance** | H4 (ou H1) | On ne trade **que dans le sens de la tendance**. Par défaut, la structure : haussière dès qu'une bougie H4 clôture au-dessus du dernier sommet (BOS/CHOCH), baissière dès qu'elle clôture sous le dernier creux. Variantes : « stricte » (HH+HL / LH+LL, sinon range = pas de trade) et moyenne mobile. |
-| Contexte | H1 ou H4 | Swings (5 bougies de chaque côté), regroupés en zones si écart < 0,35 × ATR. Zone valide si ≥ 2 contacts. |
+| **Tendance** | H4 | On ne trade **que dans le sens de la tendance**. Par défaut, la structure : haussière dès qu'une bougie H4 clôture au-dessus du dernier sommet (BOS/CHOCH), baissière dès qu'elle clôture sous le dernier creux. Variantes : « stricte » (HH+HL / LH+LL, sinon range = pas de trade) et moyenne mobile. |
+| Zones S/R | H1 (réglable séparément de la tendance) | Swings (5 bougies de chaque côté), regroupés en zones si écart < 0,35 × ATR. Zone valide si ≥ 2 contacts. |
 | Liquidation | 5m ou 15m | La mèche dépasse la zone d'au moins 0,2 × ATR(LTF), mais de moins de 1 × ATR(HTF) (au-delà, c'est une vraie cassure), puis la bougie **clôture de nouveau dans la zone**. |
 | Entrée | 5m ou 15m | Dans les 12 bougies suivantes, une **clôture** casse le dernier swing LTF opposé (CHOCH). Le sweep est annulé si le prix repasse sous sa mèche. |
 | Risque | — | Stop = mèche du sweep ± 0,2 × ATR(LTF). Objectif = 2R. Signal rejeté si le stop dépasse 1,5 × ATR(HTF). |
@@ -31,9 +31,8 @@ de *stratégie* TradingView. C'est le moyen le plus simple de backtester sur
 problème pour un backtest.
 
 1. TradingView → **Éditeur Pine** → nouveau script → colle le contenu du fichier → **Ajouter au graphique**.
-2. Choisis un couple de timeframes :
-   - graphique **5m** + paramètre *Timeframe contexte* = **60** (H1/5m) ;
-   - graphique **15m** + *Timeframe contexte* = **240** (H4/15m).
+2. Analyse top-down : *Timeframe de la TENDANCE* = **240** (H4), *Timeframe des
+   ZONES S/R* = **60** (H1), graphique en **15m** (ou 5m) pour l'entrée.
 3. Dans les paramètres, colle ton biais et tes annonces. Tu peux les générer depuis les CSV :
    ```bash
    python -m trade_analysis pine-inputs --symbol GC --bias bias.csv --news news.csv

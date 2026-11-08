@@ -168,3 +168,17 @@ def test_direction_long_only():
     htf = resample(ltf, "1h")
     sigs = generate_signals(htf, ltf, "GC", Config(trend_mode="off", direction="long"))
     assert sigs and all(s.direction == "long" for s in sigs)
+
+
+def test_separate_trend_timeframe():
+    from trade_analysis.strategy import htf_trend
+    from trade_analysis.structure import find_pivots
+    ltf = synthetic_5m()
+    zones, trend = resample(ltf, "1h"), resample(ltf, "4h")
+    cfg = Config(htf_pivot_left=2, htf_pivot_right=2)
+    sigs = generate_signals(zones, ltf, "GC", cfg, trend_htf=trend)
+    dur = pd.Timedelta(hours=4)
+    tr = htf_trend(trend, find_pivots(trend, 2, 2, dur), dur, "structure")
+    for s in sigs:
+        k = tr.index.searchsorted(s.time, side="right") - 1
+        assert tr["bos"].iloc[k] == (1 if s.direction == "long" else -1)

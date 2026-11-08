@@ -22,19 +22,23 @@ from .filters import BiasBook, NewsCalendar
 from .message import format_signal
 from .strategy import Config, generate_signals
 
-PRESETS = {"h1-5m": "1h", "h4-15m": "4h"}
+# preset -> (timeframe des zones, timeframe de la tendance)
+PRESETS = {"h4-h1-15m": ("1h", "4h"), "h4-h1-5m": ("1h", "4h"),
+           "h1-5m": ("1h", "1h"), "h4-15m": ("4h", "4h")}
 
 
-def _load(args) -> tuple[pd.DataFrame, pd.DataFrame]:
+def _load(args) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
     ltf = load_tradingview_csv(args.ltf)
+    zone_rule, trend_rule = PRESETS.get(args.preset, (None, None)) if args.preset else (args.htf_rule, None)
     if args.htf:
         htf = load_tradingview_csv(args.htf)
     else:
-        rule = PRESETS.get(args.preset) if args.preset else args.htf_rule
-        if not rule:
-            sys.exit("Donne --htf (CSV) ou --preset h1-5m|h4-15m ou --htf-rule 1h")
-        htf = resample(ltf, rule)
-    return htf, ltf
+        if not zone_rule:
+            sys.exit("Donne --htf (CSV) ou --preset h4-h1-15m|h4-h1-5m|h1-5m|h4-15m ou --htf-rule 1h")
+        htf = resample(ltf, zone_rule)
+    trend_rule = args.trend_rule or trend_rule
+    trend = resample(ltf, trend_rule) if trend_rule and trend_rule != zone_rule else None
+    return htf, ltf, trend
 
 
 def _config(args) -> Config:
@@ -54,7 +58,8 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--ltf", required=True, help="CSV TradingView timeframe d'entrée (5m/15m)")
         sp.add_argument("--htf", help="CSV TradingView timeframe de contexte (H1/H4)")
         sp.add_argument("--preset", choices=PRESETS, help="reconstruit le HTF depuis le LTF")
-        sp.add_argument("--htf-rule", help="règle pandas de rééchantillonnage, ex: 1h, 4h")
+        sp.add_argument("--htf-rule", help="timeframe des zones S/R reconstruit depuis le LTF, ex: 1h")
+        sp.add_argument("--trend-rule", help="timeframe de la tendance reconstruit depuis le LTF, ex: 4h")
         sp.add_argument("--symbol", default="GC")
         sp.add_argument("--bias", help="bias.csv (ton biais fondamental)")
         sp.add_argument("--news", help="news.csv (annonces fort impact, UTC)")
@@ -102,11 +107,11 @@ def main(argv: list[str] | None = None) -> int:
             print("\n".join(f"{pd.Timestamp(t):%Y-%m-%d %H:%M}" for t in sorted(n["time_utc"])))
         return 0
 
-    htf, ltf = _load(args)
+    htf, ltf, trend_htf = _load(args)
     cfg = _config(args)
     bias = BiasBook.from_csv(args.bias, args.symbol)
     news = NewsCalendar.from_csv(args.news, args.news_before, args.news_after)
-    signals = generate_signals(htf, ltf, args.symbol, cfg, bias, news)
+    signals = generate_signals(htf, ltf, args.symbol, cfg, bias, news, trend_htf=trend_htf)
 
     print(f"Données : {len(ltf)} bougies LTF, {len(htf)} bougies HTF, "
           f"{ltf.index[0]:%Y-%m-%d} -> {ltf.index[-1]:%Y-%m-%d}")
