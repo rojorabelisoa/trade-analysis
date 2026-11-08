@@ -1,0 +1,387 @@
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0
+// https://mozilla.org/MPL/2.0/
+//
+// Zone S/R (HTF) -> Liquidation (sweep LTF) -> Entrée (CHOCH LTF)
+// Même logique que trade_analysis/strategy.py (version Python).
+//
+// Utilisation :
+//   - Graphique 5m  + "Timeframe contexte" = 60  (H1 / 5m)
+//   - Graphique 15m + "Timeframe contexte" = 240 (H4 / 15m)
+//   - Symbole conseillé : COMEX:GC1! (or), NYMEX:CL1!, COMEX:SI1!...
+//   - Résultats : onglet "Testeur de stratégie" + tableau en R en haut à droite.
+
+//@version=6
+strategy("S/R → Liquidation → Entrée", shorttitle = "SR-Liq", overlay = true,
+     initial_capital = 100000, default_qty_type = strategy.fixed, default_qty_value = 1,
+     commission_type = strategy.commission.cash_per_contract, commission_value = 2.5,
+     slippage = 2, pyramiding = 0, max_boxes_count = 100, max_lines_count = 300,
+     max_labels_count = 300)
+
+// ───────────────────────────── Paramètres ─────────────────────────────
+grpCtx = "1. Zones S/R (contexte HTF)"
+htfTf        = input.timeframe("60", "Timeframe contexte", group = grpCtx, tooltip = "60 = H1 (graphique 5m) · 240 = H4 (graphique 15m)")
+htfL         = input.int(5, "Pivot HTF : bougies à gauche", minval = 1, group = grpCtx)
+htfR         = input.int(5, "Pivot HTF : bougies à droite", minval = 1, group = grpCtx)
+zoneMergeAtr = input.float(0.35, "Fusion des pivots (× ATR HTF)", step = 0.05, group = grpCtx)
+zoneMaxWAtr  = input.float(1.0, "Largeur max d'une zone (× ATR HTF)", step = 0.1, group = grpCtx)
+minTouches   = input.int(2, "Contacts minimum", minval = 1, group = grpCtx)
+zoneMaxAge   = input.int(300, "Âge max d'une zone (bougies HTF)", minval = 1, group = grpCtx)
+
+grpSw = "2. Liquidation (sweep)"
+sweepMinAtr  = input.float(0.2, "Dépassement min (× ATR LTF)", step = 0.05, group = grpSw)
+sweepMaxAtr  = input.float(1.0, "Dépassement max (× ATR HTF)", step = 0.1, group = grpSw, tooltip = "Au-delà : vraie cassure, pas une liquidation")
+
+grpEn = "3. Entrée (CHOCH LTF)"
+ltfL         = input.int(3, "Pivot LTF : bougies à gauche", minval = 1, group = grpEn)
+ltfR         = input.int(2, "Pivot LTF : bougies à droite", minval = 1, group = grpEn)
+confirmBars  = input.int(12, "Bougies max pour confirmer", minval = 1, group = grpEn)
+
+grpRk = "4. Risque"
+slBufAtr     = input.float(0.2, "Marge du stop (× ATR LTF)", step = 0.05, group = grpRk)
+rr           = input.float(2.0, "Objectif (R:R)", step = 0.25, group = grpRk)
+maxRiskAtr   = input.float(1.5, "Stop max (× ATR HTF)", step = 0.1, group = grpRk)
+maxHold      = input.int(288, "Durée max en position (bougies)", minval = 1, group = grpRk)
+
+grpF = "5. Fondamental & filtres"
+biasStr      = input.text_area("", "Biais fondamental", group = grpF, tooltip = "Format date:sens séparés par ; (ordre chronologique).\nEx : 2026-01-12:long;2026-01-26:short;2026-02-09:neutral\nSens : long, short, neutral, off. Vide = neutre partout. Avant la 1re date = off.")
+neutralBoth  = input.bool(true, "Biais neutre = les deux sens autorisés", group = grpF)
+newsStr      = input.text_area("", "Annonces fort impact (heure UTC)", group = grpF, tooltip = "Une par ligne ou séparées par ;\nEx : 2026-01-13 13:30\nSur investing.com, règle le fuseau sur GMT.")
+newsBefore   = input.int(30, "Minutes bloquées avant annonce", minval = 0, group = grpF)
+newsAfter    = input.int(30, "Minutes bloquées après annonce", minval = 0, group = grpF)
+sAsia        = input.bool(true, "Asie (00-07 UTC)", group = grpF, inline = "s1")
+sLondon      = input.bool(true, "Londres (07-12)", group = grpF, inline = "s1")
+sOverlap     = input.bool(true, "Overlap Londres/NY (12-16)", group = grpF, inline = "s2")
+sNy          = input.bool(true, "New York (16-21)", group = grpF, inline = "s2")
+sClose       = input.bool(true, "Fermeture (21-24)", group = grpF, inline = "s3")
+
+grpV = "6. Affichage"
+showZones    = input.bool(true, "Afficher les zones", group = grpV)
+showLevels   = input.bool(true, "Afficher stop / objectif", group = grpV)
+atrLen       = 14
+
+if timeframe.in_seconds() >= timeframe.in_seconds(htfTf)
+    runtime.error("Le timeframe contexte doit être SUPÉRIEUR au timeframe du graphique (ex : graphique 5m, contexte 60).")
+
+// ───────────────────────────── Outils ─────────────────────────────
+// Swing high : high > les L bougies avant ET >= les R bougies après.
+// La valeur n'apparaît qu'à la clôture de la R-ième bougie après (pas de look-ahead).
+f_ph(int L, int R) =>
+    hBefore = ta.highest(high, L)
+    hAfter  = ta.highest(high, R)
+    c = high[R]
+    c > hBefore[R + 1] and c >= hAfter ? c : na
+
+f_pl(int L, int R) =>
+    lBefore = ta.lowest(low, L)
+    lAfter  = ta.lowest(low, R)
+    c = low[R]
+    c < lBefore[R + 1] and c <= lAfter ? c : na
+
+f_ts(string d, string t) =>
+    dp = str.split(d, "-")
+    tp = str.split(t, ":")
+    int res = na
+    if dp.size() == 3
+        h  = tp.size() >= 2 ? int(str.tonumber(tp.get(0))) : 0
+        mi = tp.size() >= 2 ? int(str.tonumber(tp.get(1))) : 0
+        res := timestamp("UTC", int(str.tonumber(dp.get(0))), int(str.tonumber(dp.get(1))), int(str.tonumber(dp.get(2))), h, mi)
+    res
+
+// ───────────────────────────── Données HTF (bougies clôturées seulement) ─────────────────────────────
+f_htf() =>
+    ph = f_ph(htfL, htfR)
+    pl = f_pl(htfL, htfR)
+    a  = ta.atr(atrLen)
+    [ph[1], pl[1], time[htfR + 1], a[1], time[1]]
+
+[hPH, hPL, hPivT, hATR, hBarT] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
+newHtf = not na(hBarT) and (na(hBarT[1]) or hBarT != hBarT[1])
+
+// ───────────────────────────── Biais & annonces ─────────────────────────────
+var array<int>    biasT = array.new<int>()
+var array<string> biasV = array.new<string>()
+var array<int>    newsT = array.new<int>()
+
+if barstate.isfirst
+    for it in str.split(str.replace_all(str.replace_all(biasStr, "\n", ";"), " ", ""), ";")
+        kv = str.split(it, ":")
+        if kv.size() == 2
+            t = f_ts(kv.get(0), "")
+            if not na(t)
+                biasT.push(t)
+                biasV.push(str.lower(kv.get(1)))
+    for it in str.split(str.replace_all(newsStr, "\n", ";"), ";")
+        string d  = ""
+        string tm = ""
+        for x in str.split(it, " ")
+            if x != ""
+                if d == ""
+                    d := x
+                else if tm == ""
+                    tm := x
+        if d != ""
+            t = f_ts(d, tm)
+            if not na(t)
+                newsT.push(t)
+
+f_bias(int t) =>
+    string b = biasT.size() == 0 ? "neutral" : "off"
+    if biasT.size() > 0
+        for i = 0 to biasT.size() - 1
+            if biasT.get(i) <= t
+                b := biasV.get(i)
+    b
+
+f_biasAllows(int t, int dir) =>
+    b = f_bias(t)
+    b == "neutral" ? neutralBoth : (b == "long" and dir == 1) or (b == "short" and dir == -1)
+
+f_newsBlocked(int t) =>
+    bool blk = false
+    for nt in newsT
+        if t >= nt - newsBefore * 60000 and t <= nt + newsAfter * 60000
+            blk := true
+    blk
+
+f_session(int t) =>
+    h = hour(t, "UTC")
+    h < 7 ? "asie" : h < 12 ? "londres" : h < 16 ? "overlap_londres_ny" : h < 21 ? "new_york" : "fermeture"
+
+f_sessOk(int t) =>
+    h = hour(t, "UTC")
+    h < 7 ? sAsia : h < 12 ? sLondon : h < 16 ? sOverlap : h < 21 ? sNy : sClose
+
+// ───────────────────────────── Zones S/R ─────────────────────────────
+var array<float> zLow   = array.new<float>()
+var array<float> zHigh  = array.new<float>()
+var array<int>   zTouch = array.new<int>()
+var array<int>   zLast  = array.new<int>()
+var array<int>   zKind  = array.new<int>()   // 1 = pivots hauts, 2 = pivots bas, 3 = les deux
+
+f_addZone(float p, int kind, int pt, float tol, float maxW) =>
+    int   best  = -1
+    float bestD = na
+    n = zLow.size()
+    if n > 0
+        for i = 0 to n - 1
+            lo = zLow.get(i)
+            hi = zHigh.get(i)
+            if p >= lo - tol and p <= hi + tol
+                d = math.abs(p - (lo + hi) / 2)
+                if best == -1 or d < bestD
+                    best  := i
+                    bestD := d
+    if best >= 0
+        nl = math.min(zLow.get(best), p)
+        nh = math.max(zHigh.get(best), p)
+        if nh - nl <= maxW
+            zLow.set(best, nl)
+            zHigh.set(best, nh)
+        zTouch.set(best, zTouch.get(best) + 1)
+        zLast.set(best, math.max(zLast.get(best), pt))
+        zKind.set(best, zKind.get(best) == kind ? kind : 3)
+    else
+        zLow.push(p)
+        zHigh.push(p)
+        zTouch.push(1)
+        zLast.push(pt)
+        zKind.push(kind)
+        if zLow.size() > 200
+            zLow.shift()
+            zHigh.shift()
+            zTouch.shift()
+            zLast.shift()
+            zKind.shift()
+    best
+
+if newHtf and not na(hATR)
+    tol  = zoneMergeAtr * hATR
+    maxW = zoneMaxWAtr * hATR
+    if not na(hPH)
+        f_addZone(hPH, 1, hPivT, tol, maxW)
+    if not na(hPL)
+        f_addZone(hPL, 2, hPivT, tol, maxW)
+
+nowT     = time_close
+htfDurMs = timeframe.in_seconds(htfTf) * 1000
+if zLow.size() > 0
+    for i = zLow.size() - 1 to 0
+        if nowT - zLast.get(i) > zoneMaxAge * htfDurMs
+            zLow.remove(i)
+            zHigh.remove(i)
+            zTouch.remove(i)
+            zLast.remove(i)
+            zKind.remove(i)
+
+// ───────────────────────────── Structure LTF ─────────────────────────────
+ltfATR = ta.atr(atrLen)
+lph = f_ph(ltfL, ltfR)
+lpl = f_pl(ltfL, ltfR)
+var float lastHigh = na
+var float lastLow  = na
+if not na(lph)
+    lastHigh := lph
+if not na(lpl)
+    lastLow := lpl
+
+// ───────────────────────────── Machine à états ─────────────────────────────
+var int   pDir  = 0      // 1 = sweep haussier en attente, -1 = baissier
+var float pExt  = na
+var float pTrig = na
+var int   pBar  = na
+var float pZLo  = na
+var float pZHi  = na
+var int   pZT   = 0
+
+bool  sigLong   = false
+bool  sigShort  = false
+bool  sweepL    = false
+bool  sweepS    = false
+bool  confirmed = false
+float sigStop   = na
+float sigTarget = na
+
+ready     = not na(hATR) and not na(ltfATR) and bar_index > 0
+prevClose = close[1]
+
+// 1) Confirmation d'un sweep en attente
+if ready and pDir != 0
+    if bar_index - pBar > confirmBars
+        pDir := 0
+    else if (pDir == 1 and low < pExt) or (pDir == -1 and high > pExt)
+        pDir := 0
+    else if (pDir == 1 and close > pTrig) or (pDir == -1 and close < pTrig)
+        stp  = pDir == 1 ? pExt - slBufAtr * ltfATR : pExt + slBufAtr * ltfATR
+        risk = pDir == 1 ? close - stp : stp - close
+        ok   = f_biasAllows(nowT, pDir) and not f_newsBlocked(nowT) and f_sessOk(nowT)
+        if ok and risk > 0 and risk <= maxRiskAtr * hATR
+            sigStop   := stp
+            sigTarget := pDir == 1 ? close + rr * risk : close - rr * risk
+            sigLong   := pDir == 1
+            sigShort  := pDir == -1
+        pDir      := 0
+        confirmed := true
+
+// 2) Détection d'une nouvelle liquidation
+if ready and pDir == 0 and not confirmed and zLow.size() > 0
+    int bestT = -1
+    for i = 0 to zLow.size() - 1
+        t = zTouch.get(i)
+        if t >= minTouches
+            lo = zLow.get(i)
+            hi = zHigh.get(i)
+            penL = lo - low
+            if prevClose > lo and penL >= sweepMinAtr * ltfATR and penL <= sweepMaxAtr * hATR and close > lo and not na(lastHigh) and lastHigh > close
+                if bestT == -1 or t > bestT
+                    pDir  := 1
+                    pExt  := low
+                    pTrig := lastHigh
+                    pBar  := bar_index
+                    pZLo  := lo
+                    pZHi  := hi
+                    pZT   := t
+                    bestT := t
+            penH = high - hi
+            if prevClose < hi and penH >= sweepMinAtr * ltfATR and penH <= sweepMaxAtr * hATR and close < hi and not na(lastLow) and lastLow < close
+                if bestT == -1 or t > bestT
+                    pDir  := -1
+                    pExt  := high
+                    pTrig := lastLow
+                    pBar  := bar_index
+                    pZLo  := lo
+                    pZHi  := hi
+                    pZT   := t
+                    bestT := t
+    sweepL := pDir == 1
+    sweepS := pDir == -1
+
+// ───────────────────────────── Ordres ─────────────────────────────
+// Entrée au marché à l'ouverture de la bougie suivante, un seul trade à la fois.
+var array<float> tradeStop = array.new<float>()
+
+if (sigLong or sigShort) and strategy.position_size == 0
+    if sigLong
+        strategy.entry("Long", strategy.long)
+        strategy.exit("Sortie L", "Long", stop = sigStop, limit = sigTarget)
+    else
+        strategy.entry("Short", strategy.short)
+        strategy.exit("Sortie S", "Short", stop = sigStop, limit = sigTarget)
+    tradeStop.push(sigStop)
+    dirTxt = sigLong ? "long" : "short"
+    msg = '{"symbol":"' + syminfo.ticker + '","direction":"' + dirTxt + '","entry":' + str.tostring(close, format.mintick) +
+         ',"stop":' + str.tostring(sigStop, format.mintick) + ',"target":' + str.tostring(sigTarget, format.mintick) +
+         ',"rr":' + str.tostring(rr) + ',"zone":"' + str.tostring(pZLo, format.mintick) + '-' + str.tostring(pZHi, format.mintick) +
+         '","contacts":' + str.tostring(pZT) + ',"sweep":' + str.tostring(pExt, format.mintick) +
+         ',"bias":"' + f_bias(nowT) + '","session":"' + f_session(nowT) + '","tf":"' + timeframe.period + '/' + htfTf + '"}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+if strategy.position_size != 0 and bar_index - strategy.opentrades.entry_bar_index(0) >= maxHold
+    strategy.close_all(comment = "Timeout")
+
+// ───────────────────────────── Statistiques en R ─────────────────────────────
+var float sumR    = 0.0
+var int   nTrades = 0
+var int   nWins   = 0
+var float eqR     = 0.0
+var float peakR   = 0.0
+var float maxDD   = 0.0
+var int   streak  = 0
+var int   worstSt = 0
+var int   seen    = 0
+
+if strategy.closedtrades > seen
+    for k = seen to strategy.closedtrades - 1
+        if k < tradeStop.size()
+            rsk = math.abs(strategy.closedtrades.entry_price(k) - tradeStop.get(k)) * syminfo.pointvalue * math.abs(strategy.closedtrades.size(k))
+            if rsk > 0
+                r = strategy.closedtrades.profit(k) / rsk
+                nTrades += 1
+                sumR    += r
+                nWins   += r > 0 ? 1 : 0
+                eqR     += r
+                peakR   := math.max(peakR, eqR)
+                maxDD   := math.min(maxDD, eqR - peakR)
+                streak  := r <= 0 ? streak + 1 : 0
+                worstSt := math.max(worstSt, streak)
+    seen := strategy.closedtrades
+
+var table tb = table.new(position.top_right, 2, 7, bgcolor = color.new(color.black, 15), border_width = 1)
+if barstate.islast
+    txt = color.white
+    table.cell(tb, 0, 0, "Trades", text_color = txt)
+    table.cell(tb, 1, 0, str.tostring(nTrades), text_color = nTrades < 100 ? color.orange : txt)
+    table.cell(tb, 0, 1, "Réussite", text_color = txt)
+    table.cell(tb, 1, 1, nTrades > 0 ? str.tostring(100.0 * nWins / nTrades, "#.0") + " %" : "-", text_color = txt)
+    table.cell(tb, 0, 2, "Espérance", text_color = txt)
+    table.cell(tb, 1, 2, nTrades > 0 ? str.tostring(sumR / nTrades, "#.00") + " R" : "-", text_color = nTrades > 0 and sumR > 0 ? color.lime : color.red)
+    table.cell(tb, 0, 3, "Total", text_color = txt)
+    table.cell(tb, 1, 3, str.tostring(sumR, "#.0") + " R", text_color = txt)
+    table.cell(tb, 0, 4, "Drawdown max", text_color = txt)
+    table.cell(tb, 1, 4, str.tostring(maxDD, "#.0") + " R", text_color = txt)
+    table.cell(tb, 0, 5, "Pire série", text_color = txt)
+    table.cell(tb, 1, 5, str.tostring(worstSt) + " pertes", text_color = txt)
+    table.cell(tb, 0, 6, nTrades < 100 ? "⚠ < 100 trades" : "Échantillon OK", text_color = nTrades < 100 ? color.orange : color.lime)
+    table.merge_cells(tb, 0, 6, 1, 6)
+
+// ───────────────────────────── Affichage ─────────────────────────────
+plotshape(sweepL, "Liquidation haussière", shape.xcross, location.belowbar, color.new(color.teal, 0), size = size.tiny)
+plotshape(sweepS, "Liquidation baissière", shape.xcross, location.abovebar, color.new(color.maroon, 0), size = size.tiny)
+plotshape(sigLong, "Signal achat", shape.triangleup, location.belowbar, color.lime, size = size.small, text = "BUY")
+plotshape(sigShort, "Signal vente", shape.triangledown, location.abovebar, color.red, size = size.small, text = "SELL")
+
+if showLevels and (sigLong or sigShort)
+    line.new(bar_index, sigStop, bar_index + 20, sigStop, color = color.red, style = line.style_dashed)
+    line.new(bar_index, sigTarget, bar_index + 20, sigTarget, color = color.lime, style = line.style_dashed)
+
+var array<box> zBoxes = array.new<box>()
+if barstate.islast and showZones
+    for b in zBoxes
+        b.delete()
+    zBoxes.clear()
+    if zLow.size() > 0
+        for i = 0 to zLow.size() - 1
+            if zTouch.get(i) >= minTouches
+                col = zKind.get(i) == 1 ? color.red : zKind.get(i) == 2 ? color.green : color.blue
+                zBoxes.push(box.new(zLast.get(i), zHigh.get(i), time, zLow.get(i), xloc = xloc.bar_time,
+                     extend = extend.right, border_color = color.new(col, 40), bgcolor = color.new(col, 85),
+                     text = str.tostring(zTouch.get(i)) + "x", text_size = size.tiny, text_color = col))

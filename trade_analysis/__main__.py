@@ -74,7 +74,28 @@ def main(argv: list[str] | None = None) -> int:
             sp.add_argument("--last", type=int, default=1, help="nombre de signaux à afficher")
             sp.add_argument("--note", default="", help="ex: 'GC1! CME, contrat déc.'")
 
+    pi = sub.add_parser("pine-inputs", help="convertit bias.csv / news.csv pour le Pine Script")
+    pi.add_argument("--symbol", default="GC")
+    pi.add_argument("--bias")
+    pi.add_argument("--news")
+
     args = p.parse_args(argv)
+    if args.cmd == "pine-inputs":
+        if args.bias:
+            b = pd.read_csv(args.bias)
+            b.columns = [c.strip().lower() for c in b.columns]
+            b = b[b["symbol"].astype(str).str.upper() == args.symbol.upper()].sort_values("date")
+            print("Biais fondamental :")
+            print(";".join(f"{pd.Timestamp(d):%Y-%m-%d}:{v.strip().lower()}"
+                           for d, v in zip(b["date"], b["bias"])))
+        if args.news:
+            n = pd.read_csv(args.news)
+            n.columns = [c.strip().lower() for c in n.columns]
+            n = n[n["impact"].str.strip().str.lower() == "high"]
+            print("\nAnnonces fort impact (UTC) :")
+            print("\n".join(f"{pd.Timestamp(t):%Y-%m-%d %H:%M}" for t in sorted(n["time_utc"])))
+        return 0
+
     htf, ltf = _load(args)
     cfg = _config(args)
     bias = BiasBook.from_csv(args.bias, args.symbol)

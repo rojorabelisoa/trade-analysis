@@ -22,6 +22,47 @@ Tous ces chiffres sont des paramètres de départ (`Config` dans
 bougies qui le confirment. Une bougie HTF n'est utilisée qu'une fois clôturée.
 Un test vérifie que couper les données ne change jamais un signal déjà émis.
 
+## Backtest directement dans TradingView (Pine Script)
+
+Le fichier `pine/sr_liquidity_entry.pine` applique **la même logique** sous forme
+de *stratégie* TradingView. C'est le moyen le plus simple de backtester sur
+`COMEX:GC1!` sans rien exporter. Les données retardées ne posent pas de
+problème pour un backtest.
+
+1. TradingView → **Éditeur Pine** → nouveau script → colle le contenu du fichier → **Ajouter au graphique**.
+2. Choisis un couple de timeframes :
+   - graphique **5m** + paramètre *Timeframe contexte* = **60** (H1/5m) ;
+   - graphique **15m** + *Timeframe contexte* = **240** (H4/15m).
+3. Dans les paramètres, colle ton biais et tes annonces. Tu peux les générer depuis les CSV :
+   ```bash
+   python -m trade_analysis pine-inputs --symbol GC --bias bias.csv --news news.csv
+   ```
+4. Résultats : onglet **Testeur de stratégie** (en $) et tableau en haut à droite (en R).
+   Commission (2,5 $ par contrat) et glissement (2 ticks) se règlent dans *Propriétés*.
+
+Sur le graphique : ✕ = liquidation détectée, ▲ BUY / ▼ SELL = entrée confirmée,
+tirets = stop et objectif. Les zones sont dessinées en rouge (sommets), vert
+(creux) ou bleu (les deux), avec leur nombre de contacts.
+
+Pour plus tard (abonnement payant) : le script appelle `alert()` avec un message
+JSON (entrée, stop, objectif, zone, biais). Crée une alerte « Toute fonction
+alert() » avec un webhook vers ton bot Telegram.
+
+**Pine et Python ne donnent pas des résultats identiques à la trade près.**
+Trois différences :
+- Si le stop et l'objectif sont touchés dans la même bougie, TradingView
+  devine l'ordre selon la forme de la bougie. Le Python, lui, compte toujours le stop.
+- Une zone H1 apparaît une bougie 5m plus tard dans Pine.
+- L'ATR démarre un peu différemment au début de l'historique.
+
+Le Python reste la référence pessimiste.
+
+**Limite d'historique :** le nombre de bougies chargées dépend de ton
+abonnement TradingView. En 5m, cela peut ne représenter que quelques semaines,
+donc trop peu de trades. Commence par **H4/15m**, qui couvre environ 3 fois plus
+de jours. Pour plusieurs années en 5m, il faudra une source de données CME
+dédiée et le backtest Python.
+
 ## Installation
 
 ```bash
