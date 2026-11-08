@@ -522,11 +522,22 @@ if (sigLong or sigShort) and strategy.position_size == 0
         strategy.exit("Sortie S", "Short", stop = sigStop, limit = sigTarget, comment_loss = "SL", comment_profit = "TP")
     tradesToday += 1
     dirTxt = sigLong ? "long" : "short"
-    msg = '{"symbol":"' + syminfo.ticker + '","direction":"' + dirTxt + '","entry":' + str.tostring(close, format.mintick) +
-         ',"stop":' + str.tostring(sigStop, format.mintick) + ',"target":' + str.tostring(sigTarget, format.mintick) +
-         ',"rr":' + str.tostring((math.abs(sigTarget - close)) / math.abs(close - sigStop), "0.00") + ',"zone":"' + str.tostring(pZLo, format.mintick) + '-' + str.tostring(pZHi, format.mintick) +
-         '","contacts":' + str.tostring(pZT) + ',"sweep":' + str.tostring(pExt, format.mintick) +
-         ',"bias":"' + f_bias(nowT) + '","session":"' + f_session(nowT) + '","tf":"' + timeframe.period + '/' + htfTf + '/' + trendTf + '"}'
+    rrTxt = str.tostring(math.abs(sigTarget - close) / math.abs(close - sigStop), "0.00")
+    zoneTxt = str.tostring(pZLo, format.mintick) + "-" + str.tostring(pZHi, format.mintick)
+    tfTxt = timeframe.period + "/" + htfTf + "/" + trendTf
+    msg = "{"
+    msg += '"symbol":"' + syminfo.ticker + '",'
+    msg += '"direction":"' + dirTxt + '",'
+    msg += '"entry":' + str.tostring(close, format.mintick) + ','
+    msg += '"stop":' + str.tostring(sigStop, format.mintick) + ','
+    msg += '"target":' + str.tostring(sigTarget, format.mintick) + ','
+    msg += '"rr":' + rrTxt + ','
+    msg += '"zone":"' + zoneTxt + '",'
+    msg += '"contacts":' + str.tostring(pZT) + ','
+    msg += '"sweep":' + str.tostring(pExt, format.mintick) + ','
+    msg += '"bias":"' + f_bias(nowT) + '",'
+    msg += '"session":"' + f_session(nowT) + '",'
+    msg += '"tf":"' + tfTxt + '"}'
     alert(msg, alert.freq_once_per_bar_close)
 
 if strategy.position_size != 0 and bar_index - strategy.opentrades.entry_bar_index(0) >= maxHold
