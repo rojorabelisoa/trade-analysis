@@ -48,11 +48,11 @@ neutralBoth  = input.bool(true, "Biais neutre = les deux sens autorisés", group
 newsStr      = input.text_area("", "Annonces fort impact (heure UTC)", group = grpF, tooltip = "Une par ligne ou séparées par ;\nEx : 2026-01-13 13:30\nSur investing.com, règle le fuseau sur GMT.")
 newsBefore   = input.int(30, "Minutes bloquées avant annonce", minval = 0, group = grpF)
 newsAfter    = input.int(30, "Minutes bloquées après annonce", minval = 0, group = grpF)
-sAsia        = input.bool(true, "Asie (00-07 UTC)", group = grpF, inline = "s1")
-sLondon      = input.bool(true, "Londres (07-12)", group = grpF, inline = "s1")
-sOverlap     = input.bool(true, "Overlap Londres/NY (12-16)", group = grpF, inline = "s2")
-sNy          = input.bool(true, "New York (16-21)", group = grpF, inline = "s2")
-sClose       = input.bool(true, "Fermeture (21-24)", group = grpF, inline = "s3")
+sAsia        = input.bool(true, "Asie (00-07 UTC)", group = grpF)
+sLondon      = input.bool(true, "Londres (07-12)", group = grpF)
+sOverlap     = input.bool(true, "Overlap Londres/NY (12-16)", group = grpF)
+sNy          = input.bool(true, "New York (16-21)", group = grpF)
+sClose       = input.bool(true, "Fermeture (21-24)", group = grpF)
 
 grpV = "6. Affichage"
 showZones    = input.bool(true, "Afficher les zones", group = grpV)
