@@ -328,10 +328,10 @@ if (sigLong or sigShort) and strategy.position_size != 0
 
 if (sigLong or sigShort) and strategy.position_size == 0
     if sigLong
-        strategy.entry("Long", strategy.long, comment = str.tostring(sigStop))
+        strategy.entry("Long", strategy.long, comment = "SL " + str.tostring(sigStop, format.mintick))
         strategy.exit("Sortie L", "Long", stop = sigStop, limit = sigTarget)
     else
-        strategy.entry("Short", strategy.short, comment = str.tostring(sigStop))
+        strategy.entry("Short", strategy.short, comment = "SL " + str.tostring(sigStop, format.mintick))
         strategy.exit("Sortie S", "Short", stop = sigStop, limit = sigTarget)
     dirTxt = sigLong ? "long" : "short"
     msg = '{"symbol":"' + syminfo.ticker + '","direction":"' + dirTxt + '","entry":' + str.tostring(close, format.mintick) +
@@ -357,7 +357,7 @@ var int   seen    = 0
 
 if strategy.closedtrades > seen
     for k = seen to strategy.closedtrades - 1
-        stopK = str.tonumber(strategy.closedtrades.entry_comment(k))
+        stopK = str.tonumber(str.replace(strategy.closedtrades.entry_comment(k), "SL ", ""))
         if not na(stopK)
             rsk = math.abs(strategy.closedtrades.entry_price(k) - stopK) * syminfo.pointvalue * math.abs(strategy.closedtrades.size(k))
             if rsk > 0
