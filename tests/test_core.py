@@ -46,7 +46,9 @@ def test_pivot_confirmation_delay():
 
 def test_signals_generated_and_consistent():
     ltf = synthetic_5m()
-    sigs = generate_signals(resample(ltf, "1h"), ltf, "GC", Config())
+    htf = resample(ltf, "1h")
+    # Objectif R:R fixe, stop sur la mèche
+    sigs = generate_signals(htf, ltf, "GC", Config(target_mode="rr", stop_mode="sweep"))
     assert len(sigs) > 0
     for s in sigs:
         if s.direction == "long":
@@ -54,6 +56,12 @@ def test_signals_generated_and_consistent():
         else:
             assert s.target < s.entry < s.sweep_extreme < s.stop
         assert s.target - s.entry == pytest.approx(s.rr * (s.entry - s.stop))
+    # Stop et objectif structurels (H4) : stop au moins aussi loin que la mèche, R:R >= minimum
+    cfg = Config(trend_mode="off")
+    for s in generate_signals(htf, ltf, "GC", cfg, trend_htf=resample(ltf, "4h")):
+        sign = 1 if s.direction == "long" else -1
+        assert sign * (s.sweep_extreme - s.stop) > 0
+        assert sign * (s.target - s.entry) / (sign * (s.entry - s.stop)) >= cfg.min_rr - 1e-9
 
 
 def test_no_lookahead():
@@ -75,10 +83,11 @@ def test_bias_filter_blocks_direction():
     ltf = synthetic_5m()
     htf = resample(ltf, "1h")
     bias = BiasBook(pd.DataFrame({"date": ["2026-01-01"], "symbol": ["GC"], "bias": ["long"]}), "GC")
-    sigs = generate_signals(htf, ltf, "GC", Config(), bias=bias)
+    cfg = Config(trend_mode="off", target_mode="rr", stop_mode="sweep")
+    sigs = generate_signals(htf, ltf, "GC", cfg, bias=bias)
     assert sigs and all(s.direction == "long" for s in sigs)
     off = BiasBook(pd.DataFrame({"date": ["2026-01-01"], "symbol": ["GC"], "bias": ["off"]}), "GC")
-    assert generate_signals(htf, ltf, "GC", Config(), bias=off) == []
+    assert generate_signals(htf, ltf, "GC", cfg, bias=off) == []
 
 
 def test_news_blackout():

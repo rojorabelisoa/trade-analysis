@@ -39,8 +39,12 @@ confirmBars  = input.int(12, "Bougies max pour confirmer", minval = 1, group = g
 
 grpRk = "4. Risque"
 slBufAtr     = input.float(0.2, "Marge du stop (× ATR LTF)", step = 0.05, group = grpRk)
-rr           = input.float(2.0, "Objectif (R:R)", step = 0.25, group = grpRk)
-maxRiskAtr   = input.float(1.5, "Stop max (× ATR HTF)", step = 0.1, group = grpRk)
+stopMode     = input.string("Structure H4", "Stop loss", options = ["Structure H4", "Mèche de liquidation"], group = grpRk, tooltip = "• Structure H4 : sous le dernier creux H4 (achat) / au-dessus du dernier sommet H4 (vente). Si la mèche de liquidation est plus loin, c'est elle qui est utilisée.\n• Mèche de liquidation : juste derrière la mèche du sweep (stop plus court).")
+tpMode       = input.string("Liquidité H4", "Objectif (take profit)", options = ["Liquidité H4", "R:R fixe"], group = grpRk, tooltip = "• Liquidité H4 : le plus haut H4 récent (achat) / le plus bas H4 récent (vente), là où reposent les stops (BSL / SSL).\n• R:R fixe : objectif = R:R × risque.")
+tpLook       = input.int(20, "Liquidité H4 : bougies H4 regardées", minval = 3, group = grpRk)
+minRR        = input.float(1.5, "R:R minimum (sinon pas de trade)", step = 0.25, group = grpRk)
+rr           = input.float(2.0, "R:R fixe (si choisi)", step = 0.25, group = grpRk)
+maxRiskAtr   = input.float(1.5, "Stop max (× ATR du timeframe du stop)", step = 0.1, group = grpRk)
 maxHold      = input.int(288, "Durée max en position (bougies)", minval = 1, group = grpRk)
 
 grpI = "4b. Intraday (pas de position la nuit)"
@@ -153,11 +157,13 @@ f_htf() =>
     if dnBreak
         trBos := -1
     trStrict = na(prevH) or na(prevL) ? 0 : lastH > prevH and lastL > prevL ? 1 : lastH < prevH and lastL < prevL ? -1 : 0
-    [ph[1], pl[1], time[htfR + 1], a[1], time[1], e[1], trBos[1], trStrict[1], evt[1], evtLvl[1], evtT[1]]
+    hh = ta.highest(high, tpLook)
+    ll = ta.lowest(low, tpLook)
+    [ph[1], pl[1], time[htfR + 1], a[1], time[1], e[1], trBos[1], trStrict[1], evt[1], evtLvl[1], evtT[1], lastH[1], lastL[1], hh[1], ll[1]]
 
-[hPH, hPL, hPivT, hATR, hBarT, hEma0, hTrBos0, hTrStrict0, hEvt0, hEvtLvl0, hEvtT0] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
+[hPH, hPL, hPivT, hATR, hBarT, hEma0, hTrBos0, hTrStrict0, hEvt0, hEvtLvl0, hEvtT0, hLastH0, hLastL0, hHH0, hLL0] = request.security(syminfo.tickerid, htfTf, f_htf(), lookahead = barmerge.lookahead_on)
 // Tendance et structure sur le timeframe de tendance (H4)
-[tPH, tPL, tPivT, tATR, tBarT, hEma, hTrBos, hTrStrict, hEvt, hEvtLvl, hEvtT] = request.security(syminfo.tickerid, trendTf, f_htf(), lookahead = barmerge.lookahead_on)
+[tPH, tPL, tPivT, tATR, tBarT, hEma, hTrBos, hTrStrict, hEvt, hEvtLvl, hEvtT, tLastH, tLastL, tHH, tLL] = request.security(syminfo.tickerid, trendTf, f_htf(), lookahead = barmerge.lookahead_on)
 newTrendBar = not na(tBarT) and (na(tBarT[1]) or tBarT != tBarT[1])
 newHtf = not na(hBarT) and (na(hBarT[1]) or hBarT != hBarT[1])
 
@@ -360,12 +366,19 @@ if ready and pDir != 0
         pDir := 0
         cInval += 1
     else if (pDir == 1 and close > pTrig) or (pDir == -1 and close < pTrig)
-        stp  = pDir == 1 ? pExt - slBufAtr * ltfATR : pExt + slBufAtr * ltfATR
+        stpSweep = pDir == 1 ? pExt - slBufAtr * ltfATR : pExt + slBufAtr * ltfATR
+        stpH4    = pDir == 1 ? tLastL - slBufAtr * ltfATR : tLastH + slBufAtr * ltfATR
+        useH4Stp = stopMode == "Structure H4" and not na(stpH4) and (pDir == 1 ? stpH4 < stpSweep : stpH4 > stpSweep)
+        stp  = useH4Stp ? stpH4 : stpSweep
         risk = pDir == 1 ? close - stp : stp - close
+        riskCap = (stopMode == "Structure H4" ? maxRiskAtr * nz(tATR, hATR) : maxRiskAtr * hATR)
+        tgtH4   = pDir == 1 ? tHH : tLL
+        tgt     = tpMode == "Liquidité H4" ? tgtH4 : (pDir == 1 ? close + rr * risk : close - rr * risk)
+        rrReal  = risk > 0 and not na(tgt) ? (pDir == 1 ? tgt - close : close - tgt) / risk : 0.0
         okBias = f_biasAllows(nowT, pDir)
         okNews = not f_newsBlocked(nowT)
         okSess = f_sessOk(nowT)
-        okRisk = risk > 0 and risk <= maxRiskAtr * hATR
+        okRisk = risk > 0 and risk <= riskCap and rrReal >= (tpMode == "Liquidité H4" ? minRR : 0.0)
         cConfirm += 1
         cBias += okBias ? 0 : 1
         cNews += okBias and not okNews ? 1 : 0
@@ -379,7 +392,7 @@ if ready and pDir != 0
         if okBias and okNews and okSess and okRisk and okDay and okDir
             cSignal += 1
             sigStop   := stp
-            sigTarget := pDir == 1 ? close + rr * risk : close - rr * risk
+            sigTarget := tgt
             sigLong   := pDir == 1
             sigShort  := pDir == -1
             // Zone de mitigation : dernière bougie opposée avant l'impulsion (order block)
@@ -454,7 +467,7 @@ if (sigLong or sigShort) and strategy.position_size == 0
     dirTxt = sigLong ? "long" : "short"
     msg = '{"symbol":"' + syminfo.ticker + '","direction":"' + dirTxt + '","entry":' + str.tostring(close, format.mintick) +
          ',"stop":' + str.tostring(sigStop, format.mintick) + ',"target":' + str.tostring(sigTarget, format.mintick) +
-         ',"rr":' + str.tostring(rr) + ',"zone":"' + str.tostring(pZLo, format.mintick) + '-' + str.tostring(pZHi, format.mintick) +
+         ,"rr":' + str.tostring((math.abs(sigTarget - close)) / math.abs(close - sigStop), "0.00") + ',"zone":"' + str.tostring(pZLo, format.mintick) + '-' + str.tostring(pZHi, format.mintick) +
          '","contacts":' + str.tostring(pZT) + ',"sweep":' + str.tostring(pExt, format.mintick) +
          ',"bias":"' + f_bias(nowT) + '","session":"' + f_session(nowT) + '","tf":"' + timeframe.period + '/' + htfTf + '/' + trendTf + '"}'
     alert(msg, alert.freq_once_per_bar_close)
@@ -559,7 +572,7 @@ if barstate.islast
         table.cell(tb, 1, 14, str.tostring(cNews), text_color = dim)
         table.cell(tb, 0, 15, "– hors session", text_color = dim)
         table.cell(tb, 1, 15, str.tostring(cSess), text_color = dim)
-        table.cell(tb, 0, 16, "– stop trop large", text_color = dim)
+        table.cell(tb, 0, 16, "– stop trop large / R:R trop faible", text_color = dim)
         table.cell(tb, 1, 16, str.tostring(cRisk), text_color = dim)
         table.cell(tb, 0, 17, "– hors horaires / limite jour", text_color = dim)
         table.cell(tb, 1, 17, str.tostring(cDay), text_color = dim)

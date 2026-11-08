@@ -44,7 +44,8 @@ def _load(args) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
 def _config(args) -> Config:
     cfg = Config(rr=args.rr, min_touches=args.min_touches,
                  neutral_allows_both=not args.neutral_blocks,
-                 trend_mode=args.trend, direction=args.direction)
+                 trend_mode=args.trend, direction=args.direction,
+                 stop_mode=args.stop, target_mode=args.target, min_rr=args.min_rr)
     if args.sessions:
         cfg.sessions = tuple(s.strip() for s in args.sessions.split(","))
     return cfg
@@ -71,6 +72,11 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--trend", choices=["structure", "strict", "ema", "off"], default="structure",
                         help="tendance HTF : on ne trade que dans son sens (défaut : structure BOS/CHOCH)")
         sp.add_argument("--direction", choices=["both", "long", "short"], default="both")
+        sp.add_argument("--stop", choices=["h4", "sweep"], default="h4",
+                        help="stop : dernier creux/sommet du TF de tendance (h4) ou mèche de liquidation (sweep)")
+        sp.add_argument("--target", choices=["h4", "rr"], default="h4",
+                        help="objectif : liquidité du TF de tendance (h4) ou R:R fixe (rr, voir --rr)")
+        sp.add_argument("--min-rr", type=float, default=1.5)
         sp.add_argument("--neutral-blocks", action="store_true",
                         help="biais 'neutral' = pas de trade (défaut : les deux sens)")
         sp.add_argument("--decimals", type=int, default=2)

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+import numpy as np
 import pandas as pd
 
 from .filters import BiasBook, NewsCalendar, session_of
@@ -58,8 +59,12 @@ class Config:
     confirm_bars: int = 12
     # Risque
     sl_buffer_atr: float = 0.2
-    rr: float = 2.0
-    max_risk_htf_atr: float = 1.5
+    stop_mode: str = "h4"  # "h4" (dernier creux/sommet du TF de tendance) | "sweep" (mèche)
+    target_mode: str = "h4"  # "h4" (liquidité : plus haut/bas récent du TF de tendance) | "rr"
+    tp_lookback: int = 20  # bougies du TF de tendance pour la liquidité visée
+    min_rr: float = 1.5  # R:R minimum avec un objectif structurel
+    rr: float = 2.0  # R:R fixe si target_mode == "rr"
+    max_risk_htf_atr: float = 1.5  # × ATR du TF du stop
     # Filtres
     neutral_allows_both: bool = True
     trend_mode: str = "structure"  # "structure" | "strict" | "ema" | "off"
@@ -94,17 +99,21 @@ class Signal:
 
 
 def htf_trend(htf: pd.DataFrame, pivots: list[Pivot], dur: pd.Timedelta,
-              mode: str, ema_len: int = 50) -> pd.DataFrame:
+              mode: str, ema_len: int = 50, tp_look: int = 20,
+              atr_period: int = 14) -> pd.DataFrame:
     """Tendance HTF connue à la clôture de chaque bougie HTF (index = heure de clôture).
 
-    Colonnes : `bos` (1/-1/0), `strict` (1/-1/0), `ema` (valeur de la moyenne).
+    Colonnes : `bos` (1/-1/0), `strict` (1/-1/0), `ema` (moyenne mobile),
+    `last_h` / `last_l` (dernier sommet / creux confirmé, pour le stop),
+    `hh` / `ll` (plus haut / plus bas des `tp_look` dernières bougies : liquidité
+    visée par l'objectif), `atr`.
     """
     closes = htf["close"].to_numpy()
     close_times = htf.index + dur
     last_h = prev_h = last_l = prev_l = None
     tr_bos = 0
     p_i = 0
-    bos, strict = [], []
+    bos, strict, lh_list, ll_list = [], [], [], []
     for i in range(len(htf)):
         while p_i < len(pivots) and pivots[p_i].confirmed_at <= close_times[i]:
             p = pivots[p_i]
@@ -127,8 +136,15 @@ def htf_trend(htf: pd.DataFrame, pivots: list[Pivot], dur: pd.Timedelta,
             st = 0
         bos.append(tr_bos)
         strict.append(st)
+        lh_list.append(np.nan if last_h is None else last_h)
+        ll_list.append(np.nan if last_l is None else last_l)
     ema = htf["close"].ewm(span=ema_len, adjust=False).mean().to_numpy()
-    return pd.DataFrame({"bos": bos, "strict": strict, "ema": ema}, index=close_times)
+    return pd.DataFrame({
+        "bos": bos, "strict": strict, "ema": ema, "last_h": lh_list, "last_l": ll_list,
+        "hh": htf["high"].rolling(tp_look, min_periods=1).max().to_numpy(),
+        "ll": htf["low"].rolling(tp_look, min_periods=1).min().to_numpy(),
+        "atr": atr(htf, atr_period).to_numpy(),
+    }, index=close_times)
 
 
 def _bar_duration(df: pd.DataFrame) -> pd.Timedelta:
@@ -161,11 +177,13 @@ def generate_signals(
 
     htf_pivots = find_pivots(htf, cfg.htf_pivot_left, cfg.htf_pivot_right, htf_dur)
     if trend_htf is None:
-        trend_df = htf_trend(htf, htf_pivots, htf_dur, cfg.trend_mode, cfg.trend_len)
+        trend_df = htf_trend(htf, htf_pivots, htf_dur, cfg.trend_mode, cfg.trend_len,
+                             cfg.tp_lookback, cfg.atr_period)
     else:
         t_dur = _bar_duration(trend_htf)
         t_piv = find_pivots(trend_htf, cfg.htf_pivot_left, cfg.htf_pivot_right, t_dur)
-        trend_df = htf_trend(trend_htf, t_piv, t_dur, cfg.trend_mode, cfg.trend_len)
+        trend_df = htf_trend(trend_htf, t_piv, t_dur, cfg.trend_mode, cfg.trend_len,
+                             cfg.tp_lookback, cfg.atr_period)
     trend_times = trend_df.index
     trend_bos, trend_strict, trend_ema = (trend_df[k].to_numpy() for k in ("bos", "strict", "ema"))
     ltf_pivots = find_pivots(ltf, cfg.ltf_pivot_left, cfg.ltf_pivot_right, ltf_dur)
@@ -238,8 +256,9 @@ def generate_signals(
                     d == "short" and c[i] < pending["trigger"]
                 ):
                     ok_dir = allow_long if d == "long" else allow_short
+                    ctx = trend_df.iloc[kt] if kt >= 0 else None
                     sig = _build_signal(pending, i, c[i], a_ltf[i], a_htf, close_time,
-                                        symbol, cfg, bias, news, book) if ok_dir else None
+                                        symbol, cfg, bias, news, book, ctx) if ok_dir else None
                     if sig is not None:
                         signals.append(sig)
                     pending = None
@@ -282,7 +301,8 @@ def _detect_sweep(zones: list[Zone], i, h, l, c, a_ltf, a_htf, cfg: Config,
 
 def _build_signal(pending: dict, i: int, close: float, a_ltf: float, a_htf: float,
                   close_time: pd.Timestamp, symbol: str, cfg: Config,
-                  bias: BiasBook, news: NewsCalendar, book: ZoneBook) -> Signal | None:
+                  bias: BiasBook, news: NewsCalendar, book: ZoneBook,
+                  ctx: pd.Series | None = None) -> Signal | None:
     d = pending["direction"]
     if not bias.allows(close_time, d, cfg.neutral_allows_both):
         return None
@@ -292,24 +312,44 @@ def _build_signal(pending: dict, i: int, close: float, a_ltf: float, a_htf: floa
     if cfg.sessions and sess not in cfg.sessions:
         return None
 
+    def ok(x) -> bool:
+        return x is not None and not pd.isna(x)
+
+    sign = 1 if d == "long" else -1
+    buf = cfg.sl_buffer_atr * a_ltf
+    stop = pending["extreme"] - sign * buf
+    cap_atr = a_htf
+    if cfg.stop_mode == "h4" and ctx is not None:
+        struct = ctx["last_l"] if d == "long" else ctx["last_h"]
+        if ok(struct):
+            stop_h4 = struct - sign * buf
+            if sign * (stop - stop_h4) > 0:  # le creux/sommet H4 est plus loin que la mèche
+                stop = stop_h4
+        if ok(ctx["atr"]):
+            cap_atr = ctx["atr"]
+    risk = sign * (close - stop)
+    if risk <= 0 or risk > cfg.max_risk_htf_atr * cap_atr:
+        return None
+    if cfg.target_mode == "h4":
+        if ctx is None:
+            return None
+        target = ctx["hh"] if d == "long" else ctx["ll"]
+        if not ok(target) or sign * (target - close) / risk < cfg.min_rr:
+            return None
+    else:
+        target = close + sign * cfg.rr * risk
+    rr_real = sign * (target - close) / risk
+
     if d == "long":
-        stop = pending["extreme"] - cfg.sl_buffer_atr * a_ltf
-        risk = close - stop
-        target = close + cfg.rr * risk
         opp = [z.low for z in book.active(cfg.min_touches) if z.low > close]
         next_zone = min(opp) if opp else None
     else:
-        stop = pending["extreme"] + cfg.sl_buffer_atr * a_ltf
-        risk = stop - close
-        target = close - cfg.rr * risk
         opp = [z.high for z in book.active(cfg.min_touches) if z.high < close]
         next_zone = max(opp) if opp else None
-    if risk <= 0 or risk > cfg.max_risk_htf_atr * a_htf:
-        return None
 
     return Signal(
         symbol=symbol, direction=d, time=close_time, entry=float(close),
-        stop=float(stop), target=float(target), rr=cfg.rr,
+        stop=float(stop), target=float(target), rr=round(float(rr_real), 2),
         zone=pending["zone"].describe(), sweep_time=pending["time"],
         sweep_extreme=float(pending["extreme"]), bias=bias.at(close_time),
         session=sess, next_zone=next_zone,
