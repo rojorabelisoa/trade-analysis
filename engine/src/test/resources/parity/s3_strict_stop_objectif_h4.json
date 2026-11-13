@@ -1,0 +1,230 @@
+{
+ "name": "s3_strict_stop_objectif_h4",
+ "symbol": "GC",
+ "ltf": "trend_15m",
+ "zone_rule": "1h",
+ "trend_rule": "4h",
+ "use_bias": false,
+ "use_news": false,
+ "news_before_min": 30,
+ "news_after_min": 30,
+ "config": {
+  "htf_pivot_left": 3,
+  "htf_pivot_right": 3,
+  "zone_merge_atr": 0.35,
+  "zone_max_width_atr": 1.0,
+  "min_touches": 2,
+  "zone_max_age_bars": 300,
+  "sweep_min_atr": 0.2,
+  "sweep_max_atr": 1.0,
+  "ltf_pivot_left": 3,
+  "ltf_pivot_right": 2,
+  "confirm_bars": 12,
+  "sl_buffer_atr": 0.2,
+  "stop_mode": "h4",
+  "target_mode": "h4",
+  "tp_lookback": 20,
+  "min_rr": 1.0,
+  "rr": 2.0,
+  "max_risk_htf_atr": 2.5,
+  "neutral_allows_both": true,
+  "trend_mode": "strict",
+  "trend_len": 50,
+  "direction": "both",
+  "sessions": null,
+  "atr_period": 14
+ },
+ "signals": [
+  {
+   "symbol": "GC",
+   "direction": "short",
+   "time": "2026-02-21T15:30:00Z",
+   "entry": 3015.99,
+   "stop": 3019.9261419597483,
+   "target": 2916.7099999999996,
+   "rr": 25.22,
+   "zone": "3013.35-3018.38 (7 contacts, pivots high/low)",
+   "sweep_time": "2026-02-21T15:00:00Z",
+   "sweep_extreme": 3019.33,
+   "bias": "neutral",
+   "session": "overlap_londres_ny",
+   "next_zone": 3005.57
+  },
+  {
+   "symbol": "GC",
+   "direction": "short",
+   "time": "2026-03-11T00:00:00Z",
+   "entry": 2975.43,
+   "stop": 2991.940446288116,
+   "target": 2907.42,
+   "rr": 4.12,
+   "zone": "2975.10-2976.89 (3 contacts, pivots high/low)",
+   "sweep_time": "2026-03-10T23:00:00Z",
+   "sweep_extreme": 2977.81,
+   "bias": "neutral",
+   "session": "asie",
+   "next_zone": 2973.19
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-04-09T02:15:00Z",
+   "entry": 3029.26,
+   "stop": 3001.4178354834503,
+   "target": 3090.77,
+   "rr": 2.21,
+   "zone": "3020.64-3022.95 (5 contacts, pivots high/low)",
+   "sweep_time": "2026-04-09T00:45:00Z",
+   "sweep_extreme": 3019.9700000000003,
+   "bias": "neutral",
+   "session": "asie",
+   "next_zone": 3035.43
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-04-09T14:00:00Z",
+   "entry": 3025.24,
+   "stop": 3001.35420413598,
+   "target": 3090.77,
+   "rr": 2.74,
+   "zone": "3017.34-3018.88 (2 contacts, pivots low)",
+   "sweep_time": "2026-04-09T13:00:00Z",
+   "sweep_extreme": 3016.2400000000002,
+   "bias": "neutral",
+   "session": "overlap_londres_ny",
+   "next_zone": 3029.1400000000003
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-04-10T11:00:00Z",
+   "entry": 3040.87,
+   "stop": 3015.661310972199,
+   "target": 3090.77,
+   "rr": 1.98,
+   "zone": "3034.69-3036.54 (3 contacts, pivots high/low)",
+   "sweep_time": "2026-04-10T07:45:00Z",
+   "sweep_extreme": 3034.69,
+   "bias": "neutral",
+   "session": "londres",
+   "next_zone": 3042.79
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-05-02T03:30:00Z",
+   "entry": 2983.43,
+   "stop": 2975.425952205606,
+   "target": 3082.6099999999997,
+   "rr": 12.39,
+   "zone": "2977.00-2978.11 (4 contacts, pivots high/low)",
+   "sweep_time": "2026-05-02T02:00:00Z",
+   "sweep_extreme": 2976.0899999999997,
+   "bias": "neutral",
+   "session": "asie",
+   "next_zone": 2986.15
+  }
+ ],
+ "backtests": [
+  {
+   "intraday": false,
+   "cost": 0.3,
+   "max_hold_bars": 288,
+   "trades": [
+    {
+     "signal_time": "2026-02-21T15:30:00Z",
+     "entry_time": "2026-02-21T15:30:00Z",
+     "entry": 3015.99,
+     "exit_time": "2026-02-23T18:00:00Z",
+     "exit": 3019.9261419597483,
+     "outcome": "sl",
+     "r": -1.0762167632844135
+    },
+    {
+     "signal_time": "2026-03-11T00:00:00Z",
+     "entry_time": "2026-03-11T00:00:00Z",
+     "entry": 2975.43,
+     "exit_time": "2026-03-13T21:15:00Z",
+     "exit": 2991.940446288116,
+     "outcome": "sl",
+     "r": -1.0181703144036713
+    },
+    {
+     "signal_time": "2026-04-09T02:15:00Z",
+     "entry_time": "2026-04-09T02:15:00Z",
+     "entry": 3029.26,
+     "exit_time": "2026-04-12T02:15:00Z",
+     "exit": 3012.47,
+     "outcome": "timeout",
+     "r": -0.6138172191979466
+    },
+    {
+     "signal_time": "2026-05-02T03:30:00Z",
+     "entry_time": "2026-05-02T03:30:00Z",
+     "entry": 2983.43,
+     "exit_time": "2026-05-02T05:30:00Z",
+     "exit": 2975.425952205606,
+     "outcome": "sl",
+     "r": -1.037481035559298
+    }
+   ],
+   "summary": {
+    "trades": 4,
+    "taux_reussite_%": 0.0,
+    "esperance_R": -0.936,
+    "total_R": -3.75,
+    "profit_factor": 0.0,
+    "drawdown_max_R": -3.75,
+    "pire_serie_pertes": 4,
+    "sorties_tp_sl_fin": "0/3/0",
+    "duree_moyenne_min": 2906.0
+   }
+  },
+  {
+   "intraday": true,
+   "cost": 0.3,
+   "max_hold_bars": 288,
+   "trades": [
+    {
+     "signal_time": "2026-02-21T15:30:00Z",
+     "entry_time": "2026-02-21T15:30:00Z",
+     "entry": 3015.99,
+     "exit_time": "2026-02-21T20:30:00Z",
+     "exit": 3012.28,
+     "outcome": "eod",
+     "r": 0.8663305426660614
+    },
+    {
+     "signal_time": "2026-04-09T14:00:00Z",
+     "entry_time": "2026-04-09T14:00:00Z",
+     "entry": 3025.24,
+     "exit_time": "2026-04-09T20:30:00Z",
+     "exit": 3027.94,
+     "outcome": "eod",
+     "r": 0.10047812573059417
+    },
+    {
+     "signal_time": "2026-04-10T11:00:00Z",
+     "entry_time": "2026-04-10T11:00:00Z",
+     "entry": 3040.87,
+     "exit_time": "2026-04-10T20:30:00Z",
+     "exit": 3048.69,
+     "outcome": "eod",
+     "r": 0.2983098403771352
+    }
+   ],
+   "summary": {
+    "trades": 3,
+    "taux_reussite_%": 100.0,
+    "esperance_R": 0.422,
+    "total_R": 1.27,
+    "profit_factor": Infinity,
+    "drawdown_max_R": 0.0,
+    "pire_serie_pertes": 0,
+    "sorties_tp_sl_fin": "0/0/3",
+    "duree_moyenne_min": 420.0
+   }
+  }
+ ]
+}

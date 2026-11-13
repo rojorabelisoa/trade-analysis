@@ -1,0 +1,327 @@
+{
+ "name": "s4_ema_long_biais_annonces",
+ "symbol": "GC",
+ "ltf": "demo_5m",
+ "zone_rule": "1h",
+ "trend_rule": "4h",
+ "use_bias": true,
+ "use_news": true,
+ "news_before_min": 30,
+ "news_after_min": 30,
+ "config": {
+  "htf_pivot_left": 5,
+  "htf_pivot_right": 5,
+  "zone_merge_atr": 0.35,
+  "zone_max_width_atr": 1.0,
+  "min_touches": 2,
+  "zone_max_age_bars": 300,
+  "sweep_min_atr": 0.2,
+  "sweep_max_atr": 1.0,
+  "ltf_pivot_left": 3,
+  "ltf_pivot_right": 2,
+  "confirm_bars": 12,
+  "sl_buffer_atr": 0.2,
+  "stop_mode": "sweep",
+  "target_mode": "ob",
+  "tp_lookback": 20,
+  "min_rr": 1.0,
+  "rr": 2.0,
+  "max_risk_htf_atr": 1.5,
+  "neutral_allows_both": false,
+  "trend_mode": "ema",
+  "trend_len": 20,
+  "direction": "long",
+  "sessions": [
+   "londres",
+   "overlap_londres_ny",
+   "new_york"
+  ],
+  "atr_period": 14
+ },
+ "signals": [
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-01-12T07:00:00Z",
+   "entry": 2004.45,
+   "stop": 1999.1463198540253,
+   "target": 2015.0573602919496,
+   "rr": 2.0,
+   "zone": "2000.53-2003.66 (4 contacts, pivots high/low)",
+   "sweep_time": "2026-01-12T06:35:00Z",
+   "sweep_extreme": 1999.51,
+   "bias": "long",
+   "session": "londres",
+   "next_zone": 2005.96
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-01-15T10:20:00Z",
+   "entry": 2012.37,
+   "stop": 2009.5429351528862,
+   "target": 2018.0241296942272,
+   "rr": 2.0,
+   "zone": "2010.61-2012.66 (5 contacts, pivots high)",
+   "sweep_time": "2026-01-15T10:10:00Z",
+   "sweep_extreme": 2009.97,
+   "bias": "long",
+   "session": "londres",
+   "next_zone": 2013.58
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-01-15T20:40:00Z",
+   "entry": 2002.59,
+   "stop": 1999.1411336474566,
+   "target": 2009.4877327050865,
+   "rr": 2.0,
+   "zone": "2000.53-2003.66 (5 contacts, pivots high/low)",
+   "sweep_time": "2026-01-15T20:30:00Z",
+   "sweep_extreme": 1999.6,
+   "bias": "long",
+   "session": "new_york",
+   "next_zone": 2005.96
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-01-20T15:05:00Z",
+   "entry": 2005.43,
+   "stop": 1999.5061483834866,
+   "target": 2017.277703233027,
+   "rr": 2.0,
+   "zone": "2000.53-2003.66 (7 contacts, pivots high/low)",
+   "sweep_time": "2026-01-20T14:35:00Z",
+   "sweep_extreme": 1999.97,
+   "bias": "long",
+   "session": "overlap_londres_ny",
+   "next_zone": 2009.92
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-01-20T19:20:00Z",
+   "entry": 2008.4,
+   "stop": 1999.1054092472677,
+   "target": 2026.9891815054648,
+   "rr": 2.0,
+   "zone": "2000.53-2003.66 (7 contacts, pivots high/low)",
+   "sweep_time": "2026-01-20T18:30:00Z",
+   "sweep_extreme": 1999.58,
+   "bias": "long",
+   "session": "new_york",
+   "next_zone": 2009.92
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-01-21T13:10:00Z",
+   "entry": 2002.65,
+   "stop": 1993.3372459028478,
+   "target": 2021.2755081943046,
+   "rr": 2.0,
+   "zone": "1995.41-1996.36 (2 contacts, pivots high/low)",
+   "sweep_time": "2026-01-21T12:05:00Z",
+   "sweep_extreme": 1993.8,
+   "bias": "long",
+   "session": "overlap_londres_ny",
+   "next_zone": 2005.11
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-01-23T17:00:00Z",
+   "entry": 2007.34,
+   "stop": 2003.1045616413915,
+   "target": 2015.8108767172168,
+   "rr": 2.0,
+   "zone": "2005.11-2007.28 (6 contacts, pivots high)",
+   "sweep_time": "2026-01-23T16:45:00Z",
+   "sweep_extreme": 2003.59,
+   "bias": "long",
+   "session": "new_york",
+   "next_zone": 2009.92
+  },
+  {
+   "symbol": "GC",
+   "direction": "long",
+   "time": "2026-01-24T13:40:00Z",
+   "entry": 2001.68,
+   "stop": 1998.293002600377,
+   "target": 2008.4539947992464,
+   "rr": 2.0,
+   "zone": "1999.43-2003.66 (9 contacts, pivots high/low)",
+   "sweep_time": "2026-01-24T13:30:00Z",
+   "sweep_extreme": 1998.84,
+   "bias": "long",
+   "session": "overlap_londres_ny",
+   "next_zone": 2005.11
+  }
+ ],
+ "backtests": [
+  {
+   "intraday": false,
+   "cost": 0.3,
+   "max_hold_bars": 288,
+   "trades": [
+    {
+     "signal_time": "2026-01-12T07:00:00Z",
+     "entry_time": "2026-01-12T07:00:00Z",
+     "entry": 2004.45,
+     "exit_time": "2026-01-12T09:55:00Z",
+     "exit": 1999.1463198540253,
+     "outcome": "sl",
+     "r": -1.0565644970554424
+    },
+    {
+     "signal_time": "2026-01-15T10:20:00Z",
+     "entry_time": "2026-01-15T10:20:00Z",
+     "entry": 2012.37,
+     "exit_time": "2026-01-15T10:25:00Z",
+     "exit": 2009.5429351528862,
+     "outcome": "sl",
+     "r": -1.106117127205727
+    },
+    {
+     "signal_time": "2026-01-15T20:40:00Z",
+     "entry_time": "2026-01-15T20:40:00Z",
+     "entry": 2002.59,
+     "exit_time": "2026-01-15T20:45:00Z",
+     "exit": 1999.1411336474566,
+     "outcome": "sl",
+     "r": -1.0869851044760757
+    },
+    {
+     "signal_time": "2026-01-20T15:05:00Z",
+     "entry_time": "2026-01-20T15:05:00Z",
+     "entry": 2005.43,
+     "exit_time": "2026-01-20T17:45:00Z",
+     "exit": 1999.5061483834866,
+     "outcome": "sl",
+     "r": -1.05064272696563
+    },
+    {
+     "signal_time": "2026-01-20T19:20:00Z",
+     "entry_time": "2026-01-20T19:20:00Z",
+     "entry": 2008.4,
+     "exit_time": "2026-01-20T20:15:00Z",
+     "exit": 1999.1054092472677,
+     "outcome": "sl",
+     "r": -1.0322768379997591
+    },
+    {
+     "signal_time": "2026-01-21T13:10:00Z",
+     "entry_time": "2026-01-21T13:10:00Z",
+     "entry": 2002.65,
+     "exit_time": "2026-01-21T16:05:00Z",
+     "exit": 1993.3372459028478,
+     "outcome": "sl",
+     "r": -1.0322138861254522
+    },
+    {
+     "signal_time": "2026-01-23T17:00:00Z",
+     "entry_time": "2026-01-23T17:00:00Z",
+     "entry": 2007.34,
+     "exit_time": "2026-01-23T17:55:00Z",
+     "exit": 2003.1045616413915,
+     "outcome": "sl",
+     "r": -1.070830921052187
+    },
+    {
+     "signal_time": "2026-01-24T13:40:00Z",
+     "entry_time": "2026-01-24T13:40:00Z",
+     "entry": 2001.68,
+     "exit_time": "2026-01-24T14:50:00Z",
+     "exit": 2008.4539947992464,
+     "outcome": "tp",
+     "r": 1.9114259727411136
+    }
+   ],
+   "summary": {
+    "trades": 8,
+    "taux_reussite_%": 12.5,
+    "esperance_R": -0.691,
+    "total_R": -5.52,
+    "profit_factor": 0.26,
+    "drawdown_max_R": -7.44,
+    "pire_serie_pertes": 7,
+    "sorties_tp_sl_fin": "1/7/0",
+    "duree_moyenne_min": 88.0
+   }
+  },
+  {
+   "intraday": true,
+   "cost": 0.3,
+   "max_hold_bars": 288,
+   "trades": [
+    {
+     "signal_time": "2026-01-12T07:00:00Z",
+     "entry_time": "2026-01-12T07:00:00Z",
+     "entry": 2004.45,
+     "exit_time": "2026-01-12T09:55:00Z",
+     "exit": 1999.1463198540253,
+     "outcome": "sl",
+     "r": -1.0565644970554424
+    },
+    {
+     "signal_time": "2026-01-15T10:20:00Z",
+     "entry_time": "2026-01-15T10:20:00Z",
+     "entry": 2012.37,
+     "exit_time": "2026-01-15T10:25:00Z",
+     "exit": 2009.5429351528862,
+     "outcome": "sl",
+     "r": -1.106117127205727
+    },
+    {
+     "signal_time": "2026-01-20T15:05:00Z",
+     "entry_time": "2026-01-20T15:05:00Z",
+     "entry": 2005.43,
+     "exit_time": "2026-01-20T17:45:00Z",
+     "exit": 1999.5061483834866,
+     "outcome": "sl",
+     "r": -1.05064272696563
+    },
+    {
+     "signal_time": "2026-01-21T13:10:00Z",
+     "entry_time": "2026-01-21T13:10:00Z",
+     "entry": 2002.65,
+     "exit_time": "2026-01-21T16:05:00Z",
+     "exit": 1993.3372459028478,
+     "outcome": "sl",
+     "r": -1.0322138861254522
+    },
+    {
+     "signal_time": "2026-01-23T17:00:00Z",
+     "entry_time": "2026-01-23T17:00:00Z",
+     "entry": 2007.34,
+     "exit_time": "2026-01-23T17:55:00Z",
+     "exit": 2003.1045616413915,
+     "outcome": "sl",
+     "r": -1.070830921052187
+    },
+    {
+     "signal_time": "2026-01-24T13:40:00Z",
+     "entry_time": "2026-01-24T13:40:00Z",
+     "entry": 2001.68,
+     "exit_time": "2026-01-24T14:50:00Z",
+     "exit": 2008.4539947992464,
+     "outcome": "tp",
+     "r": 1.9114259727411136
+    }
+   ],
+   "summary": {
+    "trades": 6,
+    "taux_reussite_%": 16.7,
+    "esperance_R": -0.567,
+    "total_R": -3.4,
+    "profit_factor": 0.36,
+    "drawdown_max_R": -5.32,
+    "pire_serie_pertes": 5,
+    "sorties_tp_sl_fin": "1/5/0",
+    "duree_moyenne_min": 107.0
+   }
+  }
+ ]
+}

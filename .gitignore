@@ -1,0 +1,15 @@
+.gradle/
+build/
+out/
+*.class
+.idea/
+*.iml
+.vscode/
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+application-local.yml
+__pycache__/
+.pytest_cache/
