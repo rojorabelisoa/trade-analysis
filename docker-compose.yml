@@ -1,0 +1,22 @@
+# PostgreSQL 16 pour le développement local (pas pour la production).
+# Copier .env.example en .env, définir SRLIQ_DB_PASSWORD, puis : docker compose up -d
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: srliq
+      POSTGRES_USER: ${SRLIQ_DB_USER:-srliq}
+      POSTGRES_PASSWORD: ${SRLIQ_DB_PASSWORD:?definir SRLIQ_DB_PASSWORD dans .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - srliq-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d srliq"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  srliq-pgdata:

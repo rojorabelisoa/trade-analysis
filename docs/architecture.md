@@ -45,6 +45,22 @@ la même en backtest et en direct.
 | `strategy` | `StrategyConfig`, `SignalEngine` | `strategy.py` |
 | `backtest` | `IntradayRules`, `Backtester`, `BacktestSummary` | `backtest.py` |
 
+## Module `app` (`com.srliq.app`, phase 3)
+
+Spring Boot 3.5, PostgreSQL + Flyway (`app/src/main/resources/db/migration`), accès aux
+données en JDBC simple (`JdbcClient`) : upserts `ON CONFLICT` explicites, pas de JPA.
+
+| Paquet | Rôle |
+|---|---|
+| `marketdata` | `MarketDataSource` (pousse des bougies clôturées vers un `CandleSink`), import CSV TradingView, stockage idempotent |
+| `signal` | calcul (bougies LTF → H1/H4 → `SignalEngine`), enregistrement sans doublon, `SignalRecordedEvent` |
+| `webhook` | alertes TradingView `POST /api/webhooks/tradingview/{secret}` |
+| `bias`, `news`, `instrument` | API de saisie et de lecture |
+
+Démarrage local : `cp .env.example .env` (renseigner les valeurs), `docker compose up -d`,
+puis `set -a; . ./.env; set +a; ./gradlew :app:bootRun`. Les tests de `app` utilisent un vrai
+PostgreSQL (`SRLIQ_TEST_DB_URL`, défaut `jdbc:postgresql://localhost:5432/srliq_test`, `srliq`/`srliq`).
+
 ## Règles non négociables
 
 - **Aucun look-ahead** : un pivot n'existe qu'à la clôture des bougies qui le

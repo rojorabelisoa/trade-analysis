@@ -1,0 +1,9 @@
+# Profil des tests : vrai PostgreSQL (pas H2). Flyway crée le schéma.
+spring:
+  datasource:
+    url: ${SRLIQ_TEST_DB_URL:jdbc:postgresql://localhost:5432/srliq_test}
+    username: ${SRLIQ_TEST_DB_USER:srliq}
+    password: ${SRLIQ_TEST_DB_PASSWORD:srliq}
+srliq:
+  webhook:
+    token: ""

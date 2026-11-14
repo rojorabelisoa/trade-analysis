@@ -1,0 +1,64 @@
+# Configuration de l'application SR-Liq. Aucun secret ici : tout passe par des variables
+# d'environnement (voir .env.example à la racine du dépôt).
+spring:
+  application:
+    name: sr-liq-bot
+  datasource:
+    url: ${SRLIQ_DB_URL:jdbc:postgresql://localhost:5432/srliq}
+    username: ${SRLIQ_DB_USER:srliq}
+    password: ${SRLIQ_DB_PASSWORD:}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    time-zone: UTC
+    serialization:
+      # Sens en "long"/"short" (Direction.toString), comme en base et dans les alertes Pine.
+      write-enums-using-to-string: true
+  mvc:
+    problemdetails:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 55MB
+
+server:
+  # Le secret du webhook est dans l'URL : pas de journal d'accès Tomcat.
+  tomcat:
+    accesslog:
+      enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+srliq:
+  webhook:
+    # Secret de l'URL du webhook TradingView (>= 16 caractères). Vide : webhook désactivé (503).
+    token: ${SRLIQ_WEBHOOK_TOKEN:}
+  news:
+    before-minutes: 30
+    after-minutes: 30
+  # Paramètres de la stratégie (srliq.strategy.*). Chaque clé est facultative : la valeur par
+  # défaut est celle du moteur (StrategyConfig.defaults(), identique à la référence Python).
+  # Exemple :
+  # strategy:
+  #   trend-mode: structure      # structure | strict | ema | off
+  #   target-mode: ob            # ob | h4 | rr
+  #   stop-mode: sweep           # sweep | h4
+  #   direction: both            # both | long | short
+  #   sessions: [londres, overlap_londres_ny, new_york]   # vide = toutes
+  #   min-rr: 1.0
+  #   max-risk-htf-atr: 1.5
+
+logging:
+  level:
+    # Ne pas passer le web Spring en DEBUG en production : les URL (dont le secret du webhook)
+    # seraient journalisées.
+    org.springframework.web: INFO
