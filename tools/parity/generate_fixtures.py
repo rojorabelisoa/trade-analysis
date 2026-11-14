@@ -41,7 +41,7 @@ def iso(ts) -> str:
 def write_candles(df: pd.DataFrame, path: Path) -> None:
     out = df[["open", "high", "low", "close", "volume"]].copy()
     out.insert(0, "time", (df.index - pd.Timestamp("1970-01-01", tz="UTC")) // pd.Timedelta("1s"))
-    out.rename(columns={"volume": "Volume"}).to_csv(path, index=False, float_format="%.10g")
+    out.rename(columns={"volume": "Volume"}).to_csv(path, index=False, float_format="%.17g")
 
 
 def trending_15m(n=9000, seed=7, start="2026-02-02") -> pd.DataFrame:
@@ -117,8 +117,11 @@ def main() -> None:
         "demo_5m": load_tradingview_csv(str(REF / "examples/demo_5m.csv")),
         "trend_15m": trending_15m(),
     }
+    for name in list(series):
+        # La série de référence est celle RELUE depuis le CSV : la fixture se suffit à elle-même.
+        write_candles(series[name], OUT / "candles" / f"{name}.csv")
+        series[name] = load_tradingview_csv(str(OUT / "candles" / f"{name}.csv"))
     for name, df in series.items():
-        write_candles(df, OUT / "candles" / f"{name}.csv")
         for rule in ("1h", "4h"):
             write_candles(resample(df, rule), OUT / "candles" / f"{name}__{rule}.csv")
     shutil.copy(REF / "examples/bias.csv", OUT / "inputs/bias.csv")

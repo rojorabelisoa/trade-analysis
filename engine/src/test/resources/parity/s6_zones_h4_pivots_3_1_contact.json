@@ -71,7 +71,7 @@
    "time": "2026-02-21T15:45:00Z",
    "entry": 3011.96,
    "stop": 3023.5302746769094,
-   "target": 2916.7099999999996,
+   "target": 2916.71,
    "rr": 8.23,
    "zone": "3022.25-3022.25 (1 contacts, pivots low)",
    "sweep_time": "2026-02-21T13:45:00Z",
@@ -220,12 +220,12 @@
    "direction": "short",
    "time": "2026-04-03T09:00:00Z",
    "entry": 3020.17,
-   "stop": 3044.159972259859,
+   "stop": 3044.1599722598594,
    "target": 2927.1,
    "rr": 3.88,
    "zone": "3022.25-3025.72 (5 contacts, pivots high/low)",
    "sweep_time": "2026-04-03T07:30:00Z",
-   "sweep_extreme": 3026.4900000000002,
+   "sweep_extreme": 3026.49,
    "bias": "neutral",
    "session": "londres",
    "next_zone": 2991.42
@@ -240,10 +240,10 @@
    "rr": 2.74,
    "zone": "3018.38-3020.64 (2 contacts, pivots high/low)",
    "sweep_time": "2026-04-09T13:00:00Z",
-   "sweep_extreme": 3016.2400000000002,
+   "sweep_extreme": 3016.24,
    "bias": "neutral",
    "session": "overlap_londres_ny",
-   "next_zone": 3043.5299999999997
+   "next_zone": 3043.53
   },
   {
    "symbol": "GC",
@@ -270,7 +270,7 @@
    "rr": 2.22,
    "zone": "2923.37-2924.22 (2 contacts, pivots low)",
    "sweep_time": "2026-04-18T16:45:00Z",
-   "sweep_extreme": 2922.2999999999997,
+   "sweep_extreme": 2922.3,
    "bias": "neutral",
    "session": "new_york",
    "next_zone": 2942.11
@@ -333,7 +333,7 @@
    "sweep_extreme": 3077.34,
    "bias": "neutral",
    "session": "asie",
-   "next_zone": 3068.8399999999997
+   "next_zone": 3068.84
   },
   {
    "symbol": "GC",
@@ -341,7 +341,7 @@
    "time": "2026-05-01T20:00:00Z",
    "entry": 2980.67,
    "stop": 2973.0111038188365,
-   "target": 3082.6099999999997,
+   "target": 3082.61,
    "rr": 13.31,
    "zone": "2974.43-2978.11 (3 contacts, pivots high)",
    "sweep_time": "2026-05-01T19:30:00Z",
@@ -355,27 +355,27 @@
    "direction": "long",
    "time": "2026-05-03T06:30:00Z",
    "entry": 3003.19,
-   "stop": 2971.99860628768,
-   "target": 3056.0299999999997,
+   "stop": 2971.9986062876806,
+   "target": 3056.03,
    "rr": 1.69,
    "zone": "2999.66-3002.07 (2 contacts, pivots high/low)",
    "sweep_time": "2026-05-03T06:00:00Z",
    "sweep_extreme": 2998.44,
    "bias": "neutral",
    "session": "asie",
-   "next_zone": 3016.2400000000002
+   "next_zone": 3016.24
   },
   {
    "symbol": "GC",
    "direction": "long",
    "time": "2026-05-03T21:45:00Z",
    "entry": 2994.58,
-   "stop": 2972.0413486313637,
+   "stop": 2972.041348631364,
    "target": 3028.52,
    "rr": 1.51,
    "zone": "2987.39-2991.42 (4 contacts, pivots high/low)",
    "sweep_time": "2026-05-03T19:15:00Z",
-   "sweep_extreme": 2985.7400000000002,
+   "sweep_extreme": 2985.74,
    "bias": "neutral",
    "session": "fermeture",
    "next_zone": 2999.6600000000003
@@ -385,12 +385,12 @@
    "direction": "long",
    "time": "2026-05-04T12:00:00Z",
    "entry": 2975.44,
-   "stop": 2968.3077389978343,
+   "stop": 2968.307738997834,
    "target": 3005.11,
    "rr": 4.16,
    "zone": "2970.87-2972.65 (2 contacts, pivots low)",
    "sweep_time": "2026-05-04T11:15:00Z",
-   "sweep_extreme": 2968.9900000000002,
+   "sweep_extreme": 2968.99,
    "bias": "neutral",
    "session": "overlap_londres_ny",
    "next_zone": 2987.39
@@ -512,9 +512,9 @@
      "entry_time": "2026-04-03T09:00:00Z",
      "entry": 3020.17,
      "exit_time": "2026-04-05T11:45:00Z",
-     "exit": 3044.159972259859,
+     "exit": 3044.1599722598594,
      "outcome": "sl",
-     "r": -1.0125052249644313
+     "r": -1.012505224964431
     },
     {
      "signal_time": "2026-04-09T14:00:00Z",
@@ -584,9 +584,9 @@
      "entry_time": "2026-05-04T12:00:00Z",
      "entry": 2975.44,
      "exit_time": "2026-05-04T13:00:00Z",
-     "exit": 2968.3077389978343,
+     "exit": 2968.307738997834,
      "outcome": "sl",
-     "r": -1.0420623978719938
+     "r": -1.0420623978719912
     },
     {
      "signal_time": "2026-05-06T08:15:00Z",
@@ -658,7 +658,7 @@
      "exit_time": "2026-04-03T20:30:00Z",
      "exit": 3017.67,
      "outcome": "eod",
-     "r": 0.09170498307249579
+     "r": 0.09170498307249404
     },
     {
      "signal_time": "2026-04-09T14:00:00Z",
@@ -710,9 +710,9 @@
      "entry_time": "2026-05-04T12:00:00Z",
      "entry": 2975.44,
      "exit_time": "2026-05-04T13:00:00Z",
-     "exit": 2968.3077389978343,
+     "exit": 2968.307738997834,
      "outcome": "sl",
-     "r": -1.0420623978719938
+     "r": -1.0420623978719912
     },
     {
      "signal_time": "2026-05-06T08:15:00Z",
