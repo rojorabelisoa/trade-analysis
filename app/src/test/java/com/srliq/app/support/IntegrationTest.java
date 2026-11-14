@@ -55,7 +55,8 @@ public abstract class IntegrationTest {
 
     @BeforeEach
     void cleanDatabase() {
-        jdbc.sql("TRUNCATE candle, signal, fundamental_bias, news_event RESTART IDENTITY").update();
+        jdbc.sql("TRUNCATE candle, signal, fundamental_bias, news_event, paper_trade, trading_halt, notification"
+                + " RESTART IDENTITY").update();
         clock.set(NOW);
     }
 

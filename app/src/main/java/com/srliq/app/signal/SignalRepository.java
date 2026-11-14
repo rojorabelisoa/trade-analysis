@@ -70,13 +70,27 @@ public class SignalRepository {
     }
 
     /** Signal existant ayant la même clé d'unicité. */
-    public Optional<SignalRecord> findByKey(String symbol, SignalSource source, Instant time, Direction direction) {
+    public Optional<SignalRecord> findByKey(String symbol, SignalSource source, String timeframe, Instant time,
+            Direction direction) {
         return jdbc.sql("SELECT " + COLUMNS + " FROM signal s JOIN instrument i ON i.id = s.instrument_id"
-                        + " WHERE i.symbol = :symbol AND s.source = :source AND s.signal_time = :time"
-                        + " AND s.direction = :direction")
-                .param("symbol", symbol).param("source", source.name()).param("time", Jdbc.ts(time))
+                        + " WHERE i.symbol = :symbol AND s.source = :source AND s.timeframe = :tf"
+                        + " AND s.signal_time = :time AND s.direction = :direction")
+                .param("symbol", symbol).param("source", source.name()).param("tf", timeframe)
+                .param("time", Jdbc.ts(time))
                 .param("direction", direction.pyName())
                 .query(SignalRepository::map).optional();
+    }
+
+    /**
+     * Signaux du moteur (source ENGINE) d'un instrument et d'un timeframe d'entrée, dans l'ordre
+     * chronologique puis d'enregistrement (= ordre de production du moteur).
+     */
+    public List<SignalRecord> findEngineSignals(String symbol, String timeframe) {
+        return jdbc.sql("SELECT " + COLUMNS + " FROM signal s JOIN instrument i ON i.id = s.instrument_id"
+                        + " WHERE i.symbol = :symbol AND s.source = 'ENGINE' AND s.timeframe = :tf"
+                        + " ORDER BY s.signal_time, s.id")
+                .param("symbol", symbol).param("tf", timeframe)
+                .query(SignalRepository::map).list();
     }
 
     /** Critères de recherche ; un champ {@code null} ne filtre pas. Intervalle {@code [from, to)}. */

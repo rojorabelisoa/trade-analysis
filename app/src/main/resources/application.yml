@@ -45,6 +45,29 @@ srliq:
   news:
     before-minutes: 30
     after-minutes: 30
+  # Paper trading : rejeu déterministe du backtest du moteur sur l'historique stocké.
+  paper:
+    enabled: true
+    default-cost: 0.3          # coût par trade, en points de prix (commission + glissement)
+    costs: {}                  # par instrument, ex. { GC: 0.3, MGC: 0.3 }
+    max-hold-bars: 288         # sortie forcée après N bougies du timeframe d'entrée
+    capital: 100000            # capital fixe (pas de capitalisation des gains)
+    risk-percent: 1.0          # risque par trade, en % du capital
+  # Règles intraday du paper trading (heures UTC) ; valeurs par défaut du moteur.
+  intraday:
+    enabled: true
+    entry-start-hour: 7
+    entry-end-hour: 19
+    flat-hour: 20
+    flat-minute: 45
+    max-trades-per-day: 3
+    max-loss-per-day-r: 2.0
+  # Notifications Telegram. Sans jeton ou sans discussion : désactivées. Le jeton ne doit jamais
+  # être écrit ici ni journalisé.
+  telegram:
+    bot-token: ${SRLIQ_TELEGRAM_BOT_TOKEN:}
+    chat-id: ${SRLIQ_TELEGRAM_CHAT_ID:}
+    max-signal-age-minutes: 30
   # Paramètres de la stratégie (srliq.strategy.*). Chaque clé est facultative : la valeur par
   # défaut est celle du moteur (StrategyConfig.defaults(), identique à la référence Python).
   # Exemple :
@@ -56,6 +79,11 @@ srliq:
   #   sessions: [londres, overlap_londres_ny, new_york]   # vide = toutes
   #   min-rr: 1.0
   #   max-risk-htf-atr: 1.5
+
+# Exécution réelle : AUCUN adaptateur de courtier réel n'existe. true = refus de démarrer.
+trading:
+  live:
+    enabled: false
 
 logging:
   level:

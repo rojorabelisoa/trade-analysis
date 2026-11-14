@@ -45,6 +45,36 @@ public class StrategyProperties {
     private List<String> sessions = D.sessions();
     private int atrPeriod = D.atrPeriod();
 
+    /** Propriétés initialisées depuis une configuration (point de départ des surcharges d'un backtest). */
+    public static StrategyProperties from(StrategyConfig c) {
+        StrategyProperties p = new StrategyProperties();
+        p.htfPivotLeft = c.htfPivotLeft();
+        p.htfPivotRight = c.htfPivotRight();
+        p.zoneMergeAtr = c.zoneMergeAtr();
+        p.zoneMaxWidthAtr = c.zoneMaxWidthAtr();
+        p.minTouches = c.minTouches();
+        p.zoneMaxAgeBars = c.zoneMaxAgeBars();
+        p.sweepMinAtr = c.sweepMinAtr();
+        p.sweepMaxAtr = c.sweepMaxAtr();
+        p.ltfPivotLeft = c.ltfPivotLeft();
+        p.ltfPivotRight = c.ltfPivotRight();
+        p.confirmBars = c.confirmBars();
+        p.slBufferAtr = c.slBufferAtr();
+        p.stopMode = c.stopMode();
+        p.targetMode = c.targetMode();
+        p.tpLookback = c.tpLookback();
+        p.minRr = c.minRr();
+        p.rr = c.rr();
+        p.maxRiskHtfAtr = c.maxRiskHtfAtr();
+        p.neutralAllowsBoth = c.neutralAllowsBoth();
+        p.trendMode = c.trendMode();
+        p.trendLen = c.trendLen();
+        p.direction = c.direction();
+        p.sessions = c.sessions();
+        p.atrPeriod = c.atrPeriod();
+        return p;
+    }
+
     /** Construit (et valide) la configuration du moteur. */
     public StrategyConfig toConfig() {
         return StrategyConfig.builder()

@@ -44,6 +44,12 @@ public record SignalRecord(
         Objects.requireNonNull(receivedAt, "receivedAt");
     }
 
+    /** Signal au format du moteur (pour le backtest). {@code sweepExtreme} absent -> NaN. */
+    public Signal toEngine() {
+        return new Signal(symbol, direction, time, entry, stop, target, rr, zone, sweepTime,
+                sweepExtreme == null ? Double.NaN : sweepExtreme, bias, session, nextZone);
+    }
+
     /** Signal du moteur, prêt à être enregistré. */
     public static SignalRecord fromEngine(Signal s, String symbol, String timeframe, Instant receivedAt) {
         return new SignalRecord(null, symbol, SignalSource.ENGINE, timeframe, s.time(), s.direction(), s.entry(),

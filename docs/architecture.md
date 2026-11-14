@@ -56,6 +56,11 @@ données en JDBC simple (`JdbcClient`) : upserts `ON CONFLICT` explicites, pas d
 | `signal` | calcul (bougies LTF → H1/H4 → `SignalEngine`), enregistrement sans doublon, `SignalRecordedEvent` |
 | `webhook` | alertes TradingView `POST /api/webhooks/tradingview/{secret}` |
 | `bias`, `news`, `instrument` | API de saisie et de lecture |
+| `paper` (phase 4) | paper trading = rejeu déterministe de `Backtester.run` sur l'historique stocké après chaque calcul de signaux ; trades OPEN/CLOSED, dimensionnement à capital fixe, `/api/paper/*` |
+| `trading` | coupe-circuit global (périodes d'arrêt), `/api/trading/halt|resume|status` |
+| `backtest` | backtest à la demande sur un CSV, en mémoire (`POST /api/backtests`) |
+| `broker` | interface `BrokerAdapter`, `PaperBrokerAdapter` (journalise seulement) ; `trading.live.enabled=true` empêche le démarrage |
+| `notification` (phase 5) | Telegram (`sendMessage`) : signaux récents, trades simulés clôturés, coupe-circuit ; suivi et renvoi `/api/notifications` |
 
 Démarrage local : `cp .env.example .env` (renseigner les valeurs), `docker compose up -d`,
 puis `set -a; . ./.env; set +a; ./gradlew :app:bootRun`. Les tests de `app` utilisent un vrai

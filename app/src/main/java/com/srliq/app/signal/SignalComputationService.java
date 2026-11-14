@@ -16,6 +16,7 @@ import com.srliq.engine.strategy.SignalEngine;
 import com.srliq.engine.strategy.StrategyConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -32,7 +33,8 @@ import java.util.List;
  * Le moteur est rejoué sur tout l'historique stocké : le résultat est déterministe et identique au
  * backtest ; l'unicité en base rend le recalcul idempotent. Le moteur garantit l'absence de
  * look-ahead (pivots confirmés, bougies H1/H4 clôturées uniquement). Chaque signal est enregistré
- * dans sa propre transaction ({@link SignalRecorder}).
+ * dans sa propre transaction ({@link SignalRecorder}). Publie ensuite {@link SignalsRecomputedEvent}
+ * (rejeu du paper trading).
  */
 @Service
 public class SignalComputationService {
@@ -47,10 +49,12 @@ public class SignalComputationService {
     private final StrategyConfig config;
     private final NewsProperties newsProperties;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
     public SignalComputationService(InstrumentRepository instruments, CandleRepository candles,
                                     BiasRepository biases, NewsRepository news, SignalRecorder recorder,
-                                    StrategyConfig config, NewsProperties newsProperties, Clock clock) {
+                                    StrategyConfig config, NewsProperties newsProperties, Clock clock,
+                                    ApplicationEventPublisher events) {
         this.instruments = instruments;
         this.candles = candles;
         this.biases = biases;
@@ -59,6 +63,7 @@ public class SignalComputationService {
         this.config = config;
         this.newsProperties = newsProperties;
         this.clock = clock;
+        this.events = events;
     }
 
     /** Recalcule tous les timeframes d'entrée stockés pour {@code symbol}. */
@@ -110,6 +115,8 @@ public class SignalComputationService {
         }
         log.info("Signaux {} {} : {} bougies, {} signaux, {} nouveaux", ins.symbol(), label, ltf.size(),
                 generated.size(), recorded);
+        // Paper trading : rejeu du backtest sur l'historique stocké (voir PaperTradingService).
+        events.publishEvent(new SignalsRecomputedEvent(ins.symbol(), tf));
         return new RecomputeResult.TimeframeResult(label, ltf.size(), generated.size(), recorded, null);
     }
 }

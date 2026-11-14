@@ -29,6 +29,6 @@ public class SignalRecorder {
                     return new Recorded(stored, true);
                 })
                 .orElseGet(() -> new Recorded(
-                        signals.findByKey(s.symbol(), s.source(), s.time(), s.direction()).orElseThrow(), false));
+                        signals.findByKey(s.symbol(), s.source(), s.timeframe(), s.time(), s.direction()).orElseThrow(), false));
     }
 }
