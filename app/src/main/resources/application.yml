@@ -24,6 +24,9 @@ spring:
       max-request-size: 55MB
 
 server:
+  # L'API n'a pas d'authentification : par défaut, on n'écoute que sur cette machine.
+  # SERVER_ADDRESS=0.0.0.0 ouvre l'accès au réseau (téléphone sur le même Wi-Fi).
+  address: ${SERVER_ADDRESS:127.0.0.1}
   # Le secret du webhook est dans l'URL : pas de journal d'accès Tomcat.
   tomcat:
     accesslog:

@@ -39,3 +39,45 @@ tasks.test {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 }
+
+// ---------------------------------------------------------------------------
+// Interface web embarquée (facultatif) : ./gradlew :app:bootJar -PwithWeb
+// construit le front (web/, npm ci + npm run build) et copie web/dist dans
+// classpath:/static/ (servi à la racine par com.srliq.app.web.SpaWebConfig).
+// Sans -PwithWeb, le build Java ne dépend ni de Node ni de npm.
+// ---------------------------------------------------------------------------
+if (providers.gradleProperty("withWeb").isPresent) {
+    val webDir = rootProject.layout.projectDirectory.dir("web")
+    val npm = if (System.getProperty("os.name").lowercase().contains("windows")) "npm.cmd" else "npm"
+
+    val webInstall by tasks.registering(Exec::class) {
+        group = "web"
+        description = "Installe les dépendances du front (npm ci)."
+        workingDir = webDir.asFile
+        commandLine(npm, "ci", "--no-audit", "--no-fund")
+        inputs.files(webDir.file("package.json"), webDir.file("package-lock.json"), webDir.file(".npmrc"))
+        outputs.dir(webDir.dir("node_modules"))
+    }
+
+    val webBuild by tasks.registering(Exec::class) {
+        group = "web"
+        description = "Construit le front (npm run build -> web/dist)."
+        dependsOn(webInstall)
+        workingDir = webDir.asFile
+        commandLine(npm, "run", "build")
+        inputs.dir(webDir.dir("src"))
+        inputs.dir(webDir.dir("public"))
+        inputs.files(
+            webDir.file("index.html"), webDir.file("package.json"), webDir.file("package-lock.json"),
+            webDir.file("tsconfig.json"), webDir.file("vite.config.ts"),
+        )
+        outputs.dir(webDir.dir("dist"))
+    }
+
+    tasks.processResources {
+        dependsOn(webBuild)
+        from(webDir.dir("dist")) {
+            into("static")
+        }
+    }
+}

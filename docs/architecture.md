@@ -6,7 +6,7 @@
 sr-liq-bot/
 ├── engine/   Moteur de stratégie + backtest. Java 21 pur, aucune dépendance Spring.
 ├── app/      (phase 3+) Application Spring Boot : données, paper trading, Telegram, API REST.
-├── web/      (phase 6) Interface React + TypeScript (Vite).
+├── web/      (phase 6) Interface React + TypeScript (Vite), embarquée dans le jar avec -PwithWeb.
 ├── tools/parity/  Script Python qui génère les fixtures de parité depuis `develop`.
 └── docs/
 ```
@@ -62,9 +62,40 @@ données en JDBC simple (`JdbcClient`) : upserts `ON CONFLICT` explicites, pas d
 | `broker` | interface `BrokerAdapter`, `PaperBrokerAdapter` (journalise seulement) ; `trading.live.enabled=true` empêche le démarrage |
 | `notification` (phase 5) | Telegram (`sendMessage`) : signaux récents, trades simulés clôturés, coupe-circuit ; suivi et renvoi `/api/notifications` |
 
+| `web` (phase 6) | `SpaWebConfig` : sert le front embarqué (`classpath:/static/`), repli sur `index.html` pour les routes du front, jamais pour `/api/**` ni `/actuator/**` |
+
 Démarrage local : `cp .env.example .env` (renseigner les valeurs), `docker compose up -d`,
 puis `set -a; . ./.env; set +a; ./gradlew :app:bootRun`. Les tests de `app` utilisent un vrai
 PostgreSQL (`SRLIQ_TEST_DB_URL`, défaut `jdbc:postgresql://localhost:5432/srliq_test`, `srliq`/`srliq`).
+
+## Module `web` (phase 6, interface)
+
+React 19 + TypeScript + Vite, sans framework CSS ni bibliothèque de graphiques (la courbe en R est
+un SVG). Dépendances d'exécution : `react`, `react-dom`, `react-router`. Tests : Vitest +
+Testing Library (jsdom).
+
+| Dossier | Rôle |
+|---|---|
+| `src/api/types.ts` | types alignés sur les records Java renvoyés par l'API (formes JSON réelles) |
+| `src/api/client.ts` | `fetch` sur des chemins relatifs `/api/...` ; erreurs `problem+json` → `ApiError` (message `detail`, liste `errors`) |
+| `src/lib/format.ts` | nombres, R, devises, heures (fuseau du navigateur ou UTC), libellés en français, biais en vigueur (même règle que `BiasBook`) |
+| `src/lib/useApi.ts`, `src/lib/time.tsx` | états chargement / erreur / données ; choix heure locale / UTC (mémorisé dans le navigateur) |
+| `src/components/` | cartes, états vides et erreurs, coupe-circuit (confirmation dans la page), courbe en R, statistiques |
+| `src/pages/` | tableau de bord, signaux, paper trading, backtest, fondamental, données, notifications |
+
+Écrans → endpoints : tableau de bord (`/api/trading/status|halt|resume`, `/api/bias`,
+`/api/news?from=`, `/api/signals`, `/api/paper/trades?status=OPEN`, `/api/paper/summary`) ;
+signaux (`/api/signals`) ; paper trading (`/api/paper/summary|trades|replay`) ; backtest
+(`POST /api/backtests`) ; fondamental (`/api/bias`, `/api/news`, `POST /api/signals/recompute`,
+un appel par instrument pour « tous ») ; données (`POST /api/candles/import`) ; notifications
+(`/api/notifications`, `POST /api/notifications/{id}/retry`). Le biais en vigueur est calculé côté
+front à partir de `GET /api/bias` (aucun endpoint dédié). Pas d'entonnoir de diagnostic : le moteur
+n'en produit pas.
+
+Livraison : en développement, `npm run dev` (port 5173) relaie `/api` et `/actuator` vers le port
+8080. En un seul fichier, `./gradlew :app:bootJar -PwithWeb` lance `npm ci` puis `npm run build`
+et copie `web/dist` dans `classpath:/static/` ; sans `-PwithWeb`, Gradle n'appelle jamais Node.
+L'API n'a pas d'authentification : l'application ne doit pas être exposée telle quelle sur Internet.
 
 ## Règles non négociables
 
